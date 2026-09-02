@@ -13,6 +13,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import ContactUs from './pages/ContactUs';
 import SafetyGuide from './pages/SafetyGuide';
 import Layout from './components/Layout';
+import { ToastProvider } from './components/ui/Toast';
 
 // Theme Context
 interface ThemeContextType {
@@ -141,6 +142,7 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <CityProvider>
+          <ToastProvider>
           <HashRouter>
             <Layout>
               <Routes>
@@ -184,6 +186,7 @@ export default function App() {
               </Routes>
             </Layout>
           </HashRouter>
+          </ToastProvider>
         </CityProvider>
       </AuthProvider>
     </ThemeProvider>

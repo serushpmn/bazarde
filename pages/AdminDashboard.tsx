@@ -1033,7 +1033,7 @@ export const AdminDashboard: React.FC = () => {
                   />
                   <div>
                     <div className="text-xs font-bold text-gray-900 dark:text-white">{u.name}</div>
-                    <div className="text-[11px] text-gray-400 dir-ltr font-mono">{u.phone}</div>
+                    <div dir="ltr" className="text-[11px] text-gray-400 font-mono">{u.phone}</div>
                   </div>
                 </div>
                 <span className="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-semibold">

@@ -12,7 +12,12 @@ import {
 } from '../lib/formatters';
 import AdCard from '../components/AdCard';
 import AdImage from '../components/AdImage';
+import TrustSignals from '../components/TrustSignals';
+import Breadcrumbs from '../components/ui/Breadcrumbs';
+import Modal from '../components/ui/Modal';
+import { useToast } from '../components/ui/Toast';
 import { hasValidAdImage } from '../lib/adImagePlaceholders';
+import { container, priceLg, btnPrimary } from '../lib/designTokens';
 import {
   MapPin,
   Clock,
@@ -34,14 +39,13 @@ import {
   PhoneCall,
   ExternalLink,
   Flag,
-  HelpCircle,
-  Sparkles
 } from 'lucide-react';
 
 export const AdDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showToast } = useToast();
 
   const [ad, setAd] = useState<Ad | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -62,6 +66,7 @@ export const AdDetails: React.FC = () => {
 
   // Similar Ads
   const [similarAds, setSimilarAds] = useState<Ad[]>([]);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
   // Image gallery scroll & drag
   const galleryRef = useRef<HTMLDivElement>(null);
@@ -168,6 +173,7 @@ export const AdDetails: React.FC = () => {
   const handleBookmarkToggle = () => {
     const isSaved = StorageService.toggleBookmarkAd(ad.id, user?.id);
     setIsBookmarked(isSaved);
+    if (isSaved) showToast('آگهی به ذخیره‌شده‌ها اضافه شد.');
   };
 
   const handleShare = async () => {
@@ -326,30 +332,17 @@ export const AdDetails: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-0 sm:px-6 lg:px-8 pt-0 sm:pt-6 space-y-6">
+      <div className={`${container} px-0 sm:px-6 lg:px-8 pt-0 sm:pt-6 space-y-6`}>
         
-        {/* Desktop Breadcrumb Navigation */}
-        <nav className="hidden md:flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 overflow-x-auto pb-1 no-scrollbar">
-          <Link to="/" className="hover:text-primary transition-colors flex-shrink-0">بازار آلمان</Link>
-          <span>›</span>
-          {categoryObj && (
-            <>
-              <Link to={`/?cat=${categoryObj.id}`} className="hover:text-primary transition-colors flex-shrink-0">
-                {categoryObj.name}
-              </Link>
-              <span>›</span>
-            </>
-          )}
-          {subCategoryObj && (
-            <>
-              <Link to={`/?cat=${ad.categoryId}&sub=${subCategoryObj.id}`} className="hover:text-primary transition-colors flex-shrink-0">
-                {subCategoryObj.name}
-              </Link>
-              <span>›</span>
-            </>
-          )}
-          <span className="text-gray-800 dark:text-gray-200 font-semibold truncate">{ad.title}</span>
-        </nav>
+        <Breadcrumbs
+          className="hidden md:flex px-4 sm:px-0"
+          items={[
+            { label: 'بازار آلمان', to: '/' },
+            ...(categoryObj ? [{ label: categoryObj.name, to: `/?cat=${categoryObj.id}` }] : []),
+            ...(subCategoryObj ? [{ label: subCategoryObj.name, to: `/?cat=${ad.categoryId}&sub=${subCategoryObj.id}` }] : []),
+            { label: ad.title },
+          ]}
+        />
 
         {isOwner && ad.status === AdStatus.PENDING && (
           <div className="mx-4 sm:mx-0 p-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300">
@@ -368,16 +361,18 @@ export const AdDetails: React.FC = () => {
           </div>
         )}
 
-        {/* Main Grid: Info on Right (7 cols), Gallery & Desktop Contact Card on Left (5 cols) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 sm:gap-6 lg:gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
           
-          {/* ============================================================ */}
-          {/* IMAGE CAROUSEL / FULL-WIDTH ON MOBILE (Order-1 on Mobile) */}
-          {/* ============================================================ */}
-          <div className="lg:col-span-5 space-y-4 order-1 lg:order-2">
-            
-            {/* Main Image Frame (Full-width on mobile, rounded on desktop) */}
-            <div className="relative w-full aspect-[4/3] sm:rounded-3xl bg-gray-900 overflow-hidden select-none">
+          {/* Gallery Column */}
+          <div className="lg:col-span-7 space-y-3 order-1">
+            <div
+              className="relative w-full aspect-[4/3] sm:rounded-2xl bg-[#F1F3F5] dark:bg-gray-800 overflow-hidden select-none cursor-zoom-in"
+              onClick={() => images.length > 0 && setIsLightboxOpen(true)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && images.length > 0 && setIsLightboxOpen(true)}
+              aria-label="بزرگ‌نمایی تصویر"
+            >
               {images.length > 0 ? (
                 <div
                   ref={galleryRef}
@@ -473,127 +468,85 @@ export const AdDetails: React.FC = () => {
               )}
             </div>
 
-            {/* Desktop Contact Card (Only on md+ screens) */}
-            <div className="hidden md:block bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
-                  <Phone className="w-4 h-4 text-primary" />
-                  <span>اطلاعات تماس آگهی‌دهنده</span>
-                </h3>
+            {/* Thumbnails */}
+            {images.length > 1 && (
+              <div className="hidden sm:flex gap-2 px-4 sm:px-0 overflow-x-auto no-scrollbar">
+                {images.map((image, index) => (
+                  <button
+                    key={`thumb-${index}`}
+                    type="button"
+                    onClick={() => scrollToImage(index)}
+                    className={`w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-colors ${
+                      activeImageIndex === index ? 'border-primary' : 'border-transparent'
+                    }`}
+                  >
+                    <img src={image} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
               </div>
-
-              {/* Contact Button triggering Warning Modal */}
-              <button
-                onClick={() => setIsContactModalOpen(true)}
-                className="w-full py-3.5 rounded-2xl bg-primary hover:bg-secondary text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-98"
-              >
-                <Phone className="w-4 h-4" />
-                <span>مشاهده اطلاعات تماس و شماره تلفن</span>
-              </button>
-
-              {/* Utility actions for Desktop */}
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100 dark:border-gray-800 text-xs">
-                <button
-                  onClick={handleBookmarkToggle}
-                  className={`py-2 rounded-xl border font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                    isBookmarked
-                      ? 'bg-red-50 dark:bg-red-950/40 border-primary text-primary font-bold'
-                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-primary' : ''}`} />
-                  <span>{isBookmarked ? 'نشان شده' : 'نشان کردن'}</span>
-                </button>
-
-                <button
-                  onClick={handleShare}
-                  className="py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5" />}
-                  <span>{copiedLink ? 'کپی شد' : 'اشتراک‌گذاری'}</span>
-                </button>
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* ============================================================ */}
-          {/* DETAILS & CONTENT COLUMN (Order-2 on Mobile) */}
-          {/* ============================================================ */}
-          <div className="lg:col-span-7 px-4 sm:px-0 space-y-5 order-2 lg:order-1">
-            
-            {/* 1. Category Pill & Breadcrumb (Mobile View) */}
-            <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 pt-1 sm:pt-0">
-              {categoryObj && (
-                <Link
-                  to={`/?cat=${categoryObj.id}`}
-                  className="px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium hover:text-primary transition-colors text-[11px]"
-                >
-                  {categoryObj.name}
-                </Link>
-              )}
+          {/* Sticky Product Panel */}
+          <div className="lg:col-span-5 px-4 sm:px-0 order-2 lg:sticky lg:top-20 lg:self-start space-y-4">
+            <div className="flex flex-wrap items-center gap-1.5 md:hidden text-xs text-text-muted">
+              {categoryObj && <Link to={`/?cat=${categoryObj.id}`} className="hover:text-primary">{categoryObj.name}</Link>}
               {subCategoryObj && (
                 <>
-                  <span className="text-gray-300 dark:text-gray-600">›</span>
-                  <Link
-                    to={`/?cat=${ad.categoryId}&sub=${subCategoryObj.id}`}
-                    className="px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium hover:text-primary transition-colors text-[11px]"
-                  >
-                    {subCategoryObj.name}
-                  </Link>
+                  <span>›</span>
+                  <Link to={`/?cat=${ad.categoryId}&sub=${subCategoryObj.id}`} className="hover:text-primary">{subCategoryObj.name}</Link>
                 </>
               )}
             </div>
 
-            {/* 2. Title & Metadata Card */}
-            <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 sm:p-7 border border-gray-100 dark:border-gray-800 shadow-xs space-y-3">
-              <h1 className="text-lg sm:text-2xl font-black text-gray-900 dark:text-white leading-snug">
-                {ad.title}
-              </h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-text-primary dark:text-white leading-snug">{ad.title}</h1>
 
-              {/* Meta Row: Time, City, Views */}
-              <div className="flex flex-wrap items-center gap-3.5 text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-800">
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-gray-400" />
-                  <span>{getTimeAgo(ad.createdAt)}</span>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-primary" />
-                  <span>{ad.district ? `${ad.district}، ` : ''}{ad.city}</span>
-                </div>
-
-                {typeof ad.viewsCount === 'number' && (
-                  <div className="flex items-center gap-1.5 mr-auto">
-                    <Eye className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="font-mono">{toPersianDigits(ad.viewsCount)} بازدید</span>
-                  </div>
-                )}
-              </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary dark:text-gray-400">
+              <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{ad.district ? `${ad.district}، ` : ''}{ad.city}</span>
+              <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{getTimeAgo(ad.createdAt)}</span>
+              {typeof ad.viewsCount === 'number' && (
+                <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{toPersianDigits(ad.viewsCount)} بازدید</span>
+              )}
             </div>
 
-            {/* 3. Price */}
-            <div className="flex items-baseline justify-between gap-3 py-2 border-b border-gray-100 dark:border-gray-800">
-              <span className="text-[11px] text-gray-400">قیمت</span>
-              <div className="text-sm font-bold text-gray-900 dark:text-white dir-ltr font-mono">
-                {formatPrice(ad.price, ad.isNegotiable, ad.isFree, ad.currency)}
-              </div>
+            <div className="py-1">
+              <p className={priceLg}>{formatPrice(ad.price, ad.isNegotiable, ad.isFree, ad.currency)}</p>
+              {verbalPrice && <p className="text-xs text-text-muted mt-1">معادل: {verbalPrice}</p>}
             </div>
-            {verbalPrice && (
-              <p className="text-[10px] text-gray-400 -mt-2">
-                معادل: {verbalPrice}
-              </p>
-            )}
 
-            {/* 4. Scam Warning */}
-            <Link
-              to="/safety"
-              className="flex items-center justify-between py-2 text-xs text-primary font-semibold hover:underline"
-            >
+            <TrustSignals ad={ad} seller={null} />
+
+            <button type="button" onClick={() => setIsContactModalOpen(true)} className={`${btnPrimary} w-full h-14 text-base`}>
+              <Phone className="w-5 h-5" />
+              نمایش شماره تماس
+            </button>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleBookmarkToggle}
+                className={`flex-1 py-2.5 rounded-xl border text-xs font-medium flex items-center justify-center gap-1.5 ${
+                  isBookmarked ? 'border-primary text-primary bg-primary-light dark:bg-red-950/30' : 'border-border dark:border-gray-700 text-text-secondary'
+                }`}
+              >
+                <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-primary' : ''}`} />
+                {isBookmarked ? 'ذخیره شده' : 'ذخیره'}
+              </button>
+              <button type="button" onClick={handleShare} className="flex-1 py-2.5 rounded-xl border border-border dark:border-gray-700 text-text-secondary text-xs font-medium flex items-center justify-center gap-1.5">
+                {copiedLink ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                {copiedLink ? 'کپی شد' : 'اشتراک'}
+              </button>
+            </div>
+
+            <Link to="/safety" className="flex items-center justify-between py-2 text-xs text-primary font-semibold hover:underline">
               <span>زنگ خطر</span>
               <ChevronLeft className="w-4 h-4" />
             </Link>
+          </div>
+        </div>
 
-            {/* 5. Attributes & Specifications Table */}
+        <div className="px-4 sm:px-0 space-y-5">
+            {/* Attributes */}
             {ad.attributes && Object.keys(ad.attributes).length > 0 && (
               <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 sm:p-6 border border-gray-100 dark:border-gray-800 shadow-xs space-y-3">
                 <h3 className="font-bold text-sm text-gray-900 dark:text-white pb-2 border-b border-gray-100 dark:border-gray-800">
@@ -635,24 +588,14 @@ export const AdDetails: React.FC = () => {
               </ul>
             </div>
 
-            {/* 8. Violation Report Card */}
-            <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <Flag className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                <div>
-                  <h4 className="font-bold text-xs text-gray-900 dark:text-white">گزارش تخلف یا محتوای نامناسب</h4>
-                  <p className="text-[10px] text-gray-400">آیا این آگهی مشکوک یا حاوی اطلاعات نادرست است؟</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsReportOpen(true)}
-                className="px-3.5 py-2 rounded-xl bg-white dark:bg-gray-800 text-primary hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-bold border border-gray-200 dark:border-gray-700 transition-colors flex-shrink-0"
-              >
-                ثبت گزارش تخلف
-              </button>
-            </div>
-
-          </div>
+            <button
+              type="button"
+              onClick={() => setIsReportOpen(true)}
+              className="text-xs text-text-muted hover:text-primary flex items-center gap-1.5 py-2"
+            >
+              <Flag className="w-3.5 h-3.5" />
+              گزارش تخلف
+            </button>
         </div>
 
         {/* Similar Ads Section */}
@@ -681,24 +624,64 @@ export const AdDetails: React.FC = () => {
       {/* ============================================================ */}
       {/* STICKY BOTTOM CONTACT BAR FOR MOBILE */}
       {/* ============================================================ */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-800 px-4 py-2.5 shadow-2xl flex items-center justify-between gap-3">
-        {/* Price display on the right */}
-        <div className="flex flex-col min-w-0">
-          <span className="text-[9px] text-gray-400">قیمت</span>
-          <span className="text-xs font-bold text-gray-900 dark:text-white dir-ltr font-mono truncate">
-            {formatPrice(ad.price, ad.isNegotiable, ad.isFree, ad.currency)}
-          </span>
-        </div>
-
-        {/* Big Contact Info Button */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/95 dark:bg-gray-900/95 backdrop-blur-lg border-t border-border dark:border-gray-800 px-4 py-3 shadow-card flex items-center justify-between gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <p className={`${priceLg} text-lg truncate min-w-0`}>
+          {formatPrice(ad.price, ad.isNegotiable, ad.isFree, ad.currency)}
+        </p>
         <button
+          type="button"
           onClick={() => setIsContactModalOpen(true)}
-          className="flex-1 py-3 px-4 rounded-2xl bg-primary hover:bg-secondary text-white font-bold text-xs sm:text-sm shadow-md active:scale-98 transition-all flex items-center justify-center gap-2"
+          className={`${btnPrimary} flex-1 max-w-[220px] h-12 text-sm`}
         >
           <Phone className="w-4 h-4" />
-          <span>اطلاعات تماس و شماره</span>
+          تماس با فروشنده
         </button>
       </div>
+
+      {/* Lightbox */}
+      {isLightboxOpen && images.length > 0 && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setIsLightboxOpen(false)}
+          role="dialog"
+          aria-label="نمایش تصویر"
+        >
+          <button
+            type="button"
+            onClick={() => setIsLightboxOpen(false)}
+            className="absolute top-4 left-4 p-2 rounded-lg text-white/80 hover:text-white"
+            aria-label="بستن"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          {images.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); scrollToImage(activeImageIndex > 0 ? activeImageIndex - 1 : images.length - 1); }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-white/80 hover:text-white"
+                aria-label="تصویر قبلی"
+              >
+                <ChevronRight className="w-8 h-8" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); scrollToImage(activeImageIndex < images.length - 1 ? activeImageIndex + 1 : 0); }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 p-2 text-white/80 hover:text-white"
+                aria-label="تصویر بعدی"
+              >
+                <ChevronLeft className="w-8 h-8" />
+              </button>
+            </>
+          )}
+          <img
+            src={images[activeImageIndex]}
+            alt={ad.title}
+            className="max-w-full max-h-[85vh] object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/* CONTACT INFO & DEPOSIT WARNING POPUP (Modal) */}

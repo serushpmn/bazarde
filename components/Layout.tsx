@@ -5,6 +5,8 @@ import { StorageService } from '../services/storage';
 import { AppNotification, Category } from '../types';
 import { CategoryIcon } from './CategoryIcon';
 import { CityModal } from './CityModal';
+import { SearchBar } from './ui/SearchBar';
+import { container } from '../lib/designTokens';
 import { toPersianDigits, getTimeAgo } from '../lib/formatters';
 import {
   MapPin,
@@ -155,7 +157,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isAdDetailsPage = location.pathname.startsWith('/ad/');
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8f9fa] dark:bg-[#0d1117] text-gray-900 dark:text-gray-100 transition-colors">
+    <div className="min-h-screen flex flex-col bg-canvas dark:bg-[#0f141c] text-text-primary dark:text-gray-100 transition-colors">
       {/* City Selection Modal */}
       <CityModal
         isOpen={isCityModalOpen}
@@ -165,56 +167,54 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         availableCities={cities}
       />
 
-      {/* Top Navbar (Hidden on mobile for Ad Details pages) */}
-      <header className={`sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shadow-xs ${isAdDetailsPage ? 'hidden md:block' : ''}`}>
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-6">
-            
-            {/* Right: Logo & City Trigger */}
-            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-              <Link to="/" className="flex items-center gap-1.5 sm:gap-2 group flex-shrink-0">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform flex-shrink-0">
-                  <span className="font-black text-lg sm:text-xl tracking-tighter">ب</span>
+      {/* Top Navbar */}
+      <header className={`sticky top-0 z-40 bg-surface/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-border dark:border-gray-800 ${isAdDetailsPage ? 'hidden md:block' : ''}`}>
+        <div className={`${container}`}>
+          <div className="flex items-center justify-between gap-3 h-14 sm:h-16">
+            {/* Logo + City */}
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+              <Link to="/" className="flex items-center gap-2 group flex-shrink-0">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-card group-hover:bg-primary-hover transition-colors flex-shrink-0">
+                  <span className="font-bold text-lg tracking-tighter">ب</span>
                 </div>
-                <div className="flex flex-col">
-                  <span className="font-black text-sm sm:text-lg tracking-tight text-primary leading-tight">بازار آلمان</span>
-                  <span className="text-[9px] sm:text-[10px] text-gray-400 font-medium hidden sm:block">خرید و فروش امن</span>
-                </div>
+                <span className="font-bold text-sm sm:text-base text-text-primary dark:text-white hidden xs:inline">بازار آلمان</span>
               </Link>
 
-              {/* City Selector Button */}
               <button
                 onClick={() => setIsCityModalOpen(true)}
-                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/90 dark:bg-gray-800/90 hover:bg-gray-100 dark:hover:bg-gray-700 text-[11px] sm:text-xs font-semibold text-gray-700 dark:text-gray-200 transition-colors flex-shrink-0"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-border dark:border-gray-700 bg-canvas dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium text-text-secondary dark:text-gray-200 transition-colors"
               >
                 <MapPin className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                <span className="truncate max-w-[70px] sm:max-w-[140px]">
-                  {selectedCity && selectedCity !== 'ALL' ? selectedCity : 'انتخاب شهر'}
+                <span className="truncate max-w-[80px] sm:max-w-[160px]">
+                  {selectedCity && selectedCity !== 'ALL' ? selectedCity : 'همه شهرها'}
                 </span>
-                <ChevronDown className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                <ChevronDown className="w-3 h-3 text-text-muted flex-shrink-0" />
               </button>
             </div>
 
-            {/* Middle: Category Menu Trigger (Desktop) */}
-            <div className="hidden md:flex items-center gap-2 relative" ref={categoryMenuRef}>
+            {/* Desktop Search */}
+            <div className="hidden lg:flex flex-1 max-w-xl mx-4">
+              <SearchBar compact className="w-full" />
+            </div>
+
+            {/* Categories (Desktop) */}
+            <div className="hidden md:flex items-center relative" ref={categoryMenuRef}>
               <button
                 onClick={() => setIsCategoryMenuOpen(!isCategoryMenuOpen)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-colors ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${
                   isCategoryMenuOpen
-                    ? 'bg-red-50 dark:bg-red-950/30 border-primary text-primary'
-                    : 'bg-transparent border-transparent hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
+                    ? 'bg-primary-light dark:bg-red-950/30 border-primary text-primary'
+                    : 'border-transparent hover:bg-canvas dark:hover:bg-gray-800 text-text-secondary dark:text-gray-300'
                 }`}
               >
-                <Layers className="w-4 h-4 text-primary" />
-                <span>دسته‌بندی‌ها</span>
+                <Layers className="w-4 h-4" />
+                <span>دسته‌بندی</span>
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isCategoryMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
-              {/* Desktop Mega Menu Flyout */}
               {isCategoryMenuOpen && (
-                <div className="absolute top-12 right-0 w-[640px] bg-white dark:bg-gray-900 rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden flex z-50 animate-in fade-in zoom-in-95 duration-150">
-                  {/* Category List */}
-                  <div className="w-56 bg-gray-50/80 dark:bg-gray-800/40 p-2 space-y-1 border-l border-gray-100 dark:border-gray-800 overflow-y-auto max-h-[380px] no-scrollbar">
+                <div className="absolute top-12 right-0 w-[600px] bg-surface dark:bg-gray-900 rounded-2xl shadow-card-hover border border-border dark:border-gray-800 overflow-hidden flex z-50 animate-modal-in">
+                  <div className="w-52 bg-canvas dark:bg-gray-800/40 p-2 space-y-0.5 border-l border-border dark:border-gray-800 overflow-y-auto max-h-[360px] no-scrollbar">
                     {categories.map((cat) => {
                       const isActive = (activeHoverCategory || categories[0])?.id === cat.id;
                       return (
@@ -225,43 +225,38 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                             navigate(`/?cat=${cat.id}`);
                             setIsCategoryMenuOpen(false);
                           }}
-                          className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-semibold text-right transition-colors ${
+                          className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-medium text-right transition-colors ${
                             isActive
-                              ? 'bg-white dark:bg-gray-800 text-primary shadow-xs font-bold'
-                              : 'text-gray-600 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-gray-800/60'
+                              ? 'bg-surface dark:bg-gray-800 text-primary shadow-card'
+                              : 'text-text-secondary dark:text-gray-300 hover:bg-surface/60 dark:hover:bg-gray-800/60'
                           }`}
                         >
-                          <div className="flex items-center gap-2.5">
+                          <div className="flex items-center gap-2">
                             <CategoryIcon name={cat.icon} className="w-4 h-4 text-primary" />
                             <span>{cat.name}</span>
                           </div>
-                          <span className="text-[10px] text-gray-400">›</span>
+                          <span className="text-text-muted">›</span>
                         </button>
                       );
                     })}
                   </div>
-
-                  {/* Subcategories Subpanel */}
-                  <div className="flex-1 p-5 overflow-y-auto max-h-[380px]">
+                  <div className="flex-1 p-4 overflow-y-auto max-h-[360px]">
                     {activeHoverCategory && (
                       <div>
-                        <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dark:border-gray-800">
-                          <Link
-                            to={`/?cat=${activeHoverCategory.id}`}
-                            onClick={() => setIsCategoryMenuOpen(false)}
-                            className="font-bold text-sm text-gray-900 dark:text-white hover:text-primary transition-colors flex items-center gap-2"
-                          >
-                            <span>همه آگهی‌های {activeHoverCategory.name}</span>
-                            <span className="text-xs text-primary font-normal">نمایش همه ←</span>
-                          </Link>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <Link
+                          to={`/?cat=${activeHoverCategory.id}`}
+                          onClick={() => setIsCategoryMenuOpen(false)}
+                          className="font-semibold text-sm text-text-primary dark:text-white hover:text-primary transition-colors flex items-center gap-2 pb-3 mb-3 border-b border-border dark:border-gray-800"
+                        >
+                          همه آگهی‌های {activeHoverCategory.name}
+                        </Link>
+                        <div className="grid grid-cols-2 gap-1">
                           {activeHoverCategory.subcategories?.map((sub) => (
                             <Link
                               key={sub.id}
                               to={`/?cat=${activeHoverCategory.id}&sub=${sub.id}`}
                               onClick={() => setIsCategoryMenuOpen(false)}
-                              className="p-2 rounded-lg text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-primary transition-colors"
+                              className="p-2 rounded-lg text-xs text-text-secondary dark:text-gray-300 hover:bg-canvas dark:hover:bg-gray-800 hover:text-primary transition-colors"
                             >
                               {sub.name}
                             </Link>
@@ -274,8 +269,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               )}
             </div>
 
-            {/* Left Action Buttons */}
-            <div className="flex items-center gap-1.5 sm:gap-3">
+            {/* Actions */}
+            <div className="flex items-center gap-1 sm:gap-2">
               {/* Theme Toggle */}
               <button
                 onClick={toggleTheme}
@@ -392,7 +387,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     >
                       <div className="p-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40">
                         <div className="font-bold text-xs text-gray-900 dark:text-white truncate">{user.name}</div>
-                        <div className="text-[11px] text-gray-400 dir-ltr text-left font-mono">{user.phone}</div>
+                        <div dir="ltr" className="text-[11px] text-gray-400 text-left font-mono">{user.phone}</div>
                       </div>
                       <div className="p-1.5 space-y-0.5 text-xs">
                         <Link
@@ -448,12 +443,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* Post Ad Button (Desktop only - On mobile, it's prominently centered in bottom bar) */}
               <Link
                 to="/new-ad"
-                className="hidden md:flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl bg-primary hover:bg-secondary text-white text-xs font-bold shadow-md hover:shadow-lg transition-all active:scale-95 flex-shrink-0"
+                className="hidden md:flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs font-semibold shadow-card transition-colors flex-shrink-0"
               >
                 <PlusCircle className="w-4 h-4" />
-                <span>ثبت آگهی رایگان</span>
+                <span>ثبت آگهی</span>
               </Link>
             </div>
+          </div>
+
+          {/* Mobile Search */}
+          <div className="lg:hidden pb-3">
+            <SearchBar compact />
           </div>
         </div>
       </header>
@@ -546,7 +546,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </main>
 
       {/* Mobile Bottom Sticky Navigation (Hidden on Ad Details pages because it has its own sticky contact bar) */}
-      <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-800 px-2 py-1.5 shadow-lg ${isAdDetailsPage ? 'hidden' : ''}`}>
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/95 dark:bg-gray-900/95 backdrop-blur-lg border-t border-border dark:border-gray-800 px-2 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] shadow-card ${isAdDetailsPage ? 'hidden' : ''}`}>
         <div className="grid grid-cols-5 items-center text-center">
           <Link
             to="/"
@@ -605,8 +605,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </nav>
 
       {/* Footer */}
-      <footer className="hidden md:block bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 pt-12 pb-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <footer className="hidden md:block bg-surface dark:bg-gray-900 border-t border-border dark:border-gray-800 pt-10 pb-8">
+        <div className={container}>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
             <div>
               <div className="flex items-center gap-2 mb-3">

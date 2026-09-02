@@ -10,7 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         darkMode: 'class',
@@ -21,46 +21,92 @@
             },
             colors: {
               primary: {
-                DEFAULT: '#b41e28',
-                50: '#fef2f2',
-                100: '#fee2e2',
-                200: '#fecaca',
-                300: '#fca5a5',
-                400: '#f87171',
-                500: '#ef4444',
-                600: '#dc2626',
-                700: '#b41e28',
-                800: '#991b1b',
-                900: '#7f1d1d',
-                950: '#450a0a',
+                DEFAULT: '#C61F2B',
+                hover: '#A71923',
+                light: '#FDECEE',
               },
-              secondary: '#8a131b',
-            }
+              secondary: '#A71923',
+              canvas: '#F6F7F8',
+              surface: '#FFFFFF',
+              border: '#E5E7EB',
+              'text-primary': '#171717',
+              'text-secondary': '#6B7280',
+              'text-muted': '#9CA3AF',
+              success: '#16A34A',
+              warning: '#F59E0B',
+              danger: '#DC2626',
+            },
+            boxShadow: {
+              card: '0 2px 12px rgba(0,0,0,0.04)',
+              'card-hover': '0 8px 25px rgba(0,0,0,0.08)',
+            },
+            maxWidth: {
+              page: '1320px',
+            },
+            transitionDuration: {
+              DEFAULT: '200ms',
+            },
           },
         },
       }
     </script>
     <style>
-      /* Hide scrollbars while preserving scrolling */
-      .no-scrollbar::-webkit-scrollbar {
-        display: none;
-      }
-      .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
+      :root {
+        --color-primary: #C61F2B;
+        --color-primary-hover: #A71923;
+        --color-primary-light: #FDECEE;
+        --color-background: #F6F7F8;
+        --color-surface: #FFFFFF;
+        --color-text: #171717;
+        --color-text-secondary: #6B7280;
+        --color-text-muted: #9CA3AF;
+        --color-border: #E5E7EB;
+        --radius-card: 16px;
+        --radius-button: 12px;
+        --shadow-card: 0 2px 12px rgba(0,0,0,0.04);
+        --shadow-card-hover: 0 8px 25px rgba(0,0,0,0.08);
       }
 
-      * {
-        font-feature-settings: "ss01";
+      .dark {
+        --color-background: #0f141c;
+        --color-surface: #111827;
+        --color-text: #f3f4f6;
+        --color-border: #374151;
       }
 
-      /* Smooth transitions for theme switches */
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+      * { font-feature-settings: "ss01"; }
+
       body {
         font-family: 'Vazirmatn', 'Vazir', sans-serif;
+        background-color: var(--color-background);
+        color: var(--color-text);
+        line-height: 1.8;
+      }
+
+      h1, h2, h3, h4 { line-height: 1.4; }
+
+      @keyframes modal-in {
+        from { opacity: 0; transform: scale(0.97) translateY(8px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      .animate-modal-in { animation: modal-in 0.2s ease-out; }
+
+      @keyframes toast-in {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-toast-in { animation: toast-in 0.2s ease-out; }
+
+      :focus-visible {
+        outline: 2px solid var(--color-primary);
+        outline-offset: 2px;
       }
     </style>
   </head>
-  <body class="bg-[#f8f9fa] dark:bg-[#0f141c] text-gray-900 dark:text-gray-100 transition-colors duration-200 min-h-screen antialiased selection:bg-red-500 selection:text-white">
+  <body class="bg-canvas dark:bg-[#0f141c] text-text-primary dark:text-gray-100 transition-colors duration-200 min-h-screen antialiased selection:bg-primary selection:text-white">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

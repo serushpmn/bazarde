@@ -5,21 +5,21 @@ import { Ad, AdStatus, Category, Banner } from '../types';
 import { useCity } from '../App';
 import AdCard from '../components/AdCard';
 import { CategoryIcon } from '../components/CategoryIcon';
+import { ListingFilters } from '../components/ListingFilters';
+import EmptyState from '../components/ui/EmptyState';
+import Modal from '../components/ui/Modal';
 import { hasValidAdImage } from '../lib/adImagePlaceholders';
 import { toPersianDigits } from '../lib/formatters';
+import { container } from '../lib/designTokens';
 import { Link } from 'react-router-dom';
 import {
   Search,
   SlidersHorizontal,
   LayoutGrid,
   List,
-  Camera,
   X,
   RotateCcw,
-  ArrowUpDown,
   Layers,
-  Euro,
-  Coins
 } from 'lucide-react';
 
 export const Home: React.FC = () => {
@@ -107,18 +107,6 @@ export const Home: React.FC = () => {
       newParams.delete('sub');
     } else {
       newParams.set('sub', subId);
-    }
-    setSearchParams(newParams);
-  };
-
-  // Handle Search Submit
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newParams = new URLSearchParams(searchParams);
-    if (searchQuery.trim()) {
-      newParams.set('q', searchQuery.trim());
-    } else {
-      newParams.delete('q');
     }
     setSearchParams(newParams);
   };
@@ -222,8 +210,19 @@ export const Home: React.FC = () => {
     Boolean(maxPrice)
   ].filter(Boolean).length;
 
+  const clearAdvancedFilters = () => {
+    setOnlyPhotos(false);
+    setCurrencyFilter('ALL');
+    setMinPrice('');
+    setMaxPrice('');
+  };
+
+  const pageTitle = activeCategoryObj
+    ? activeCategoryObj.name
+    : `آگهی‌های ${selectedCity && selectedCity !== 'ALL' ? selectedCity : 'سراسر آلمان'}`;
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className={`${container} py-5 sm:py-6 space-y-5`}>
 
       {banners.length > 0 && (
         <div className="relative rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-xs">
@@ -273,195 +272,147 @@ export const Home: React.FC = () => {
         </div>
       )}
       
-      {/* Top Search & Filter Hero Bar */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl p-4 sm:p-6 border border-gray-100 dark:border-gray-800 shadow-xs">
-        <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder="جستجو در تمام آگهی‌ها و خدمات ایرانیان آلمان (مثلاً مسکن، خودرو، لپ‌تاپ...)"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-4 pr-12 py-3 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700/80 rounded-2xl text-xs sm:text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10 dark:text-white transition-all placeholder:text-gray-400"
-            />
-            <Search className="w-5 h-5 text-gray-400 absolute right-4 top-3.5" />
-            {searchQuery && (
+      {/* Category Navigation */}
+      <div className="bg-surface dark:bg-gray-900 rounded-2xl p-4 border border-border dark:border-gray-800 shadow-card">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <button
+            onClick={() => handleSelectCategory('ALL')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 border ${
+              activeCategory === 'ALL'
+                ? 'bg-primary text-white border-primary'
+                : 'bg-canvas dark:bg-gray-800 border-border dark:border-gray-700 text-text-secondary dark:text-gray-300 hover:border-primary/30'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>همه</span>
+          </button>
+          {categories.map((cat) => {
+            const isSelected = activeCategory === cat.id;
+            return (
               <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  const newParams = new URLSearchParams(searchParams);
-                  newParams.delete('q');
-                  setSearchParams(newParams);
-                }}
-                className="absolute left-4 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsFilterModalOpen(true)}
-              className={`flex items-center gap-2 px-4 py-3 rounded-2xl border text-xs font-bold transition-all ${
-                activeFiltersCount > 0
-                  ? 'bg-red-50 dark:bg-red-950/40 border-primary text-primary shadow-xs'
-                  : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-              <span>فیلترها</span>
-              {activeFiltersCount > 0 && (
-                <span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] flex items-center justify-center font-bold">
-                  {toPersianDigits(activeFiltersCount)}
-                </span>
-              )}
-            </button>
-
-            <button
-              type="submit"
-              className="px-6 py-3 rounded-2xl bg-primary hover:bg-secondary text-white text-xs font-bold shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5"
-            >
-              <Search className="w-4 h-4" />
-              <span>جستجو</span>
-            </button>
-          </div>
-        </form>
-
-        {/* Category Carousel Pills */}
-        <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-            <button
-              onClick={() => handleSelectCategory('ALL')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 border ${
-                activeCategory === 'ALL'
-                  ? 'bg-primary text-white border-primary shadow-xs'
-                  : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>همه دسته‌ها</span>
-            </button>
-
-            {categories.map((cat) => {
-              const isSelected = activeCategory === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => handleSelectCategory(cat.id)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 border ${
-                    isSelected
-                      ? 'bg-primary text-white border-primary shadow-xs font-bold'
-                      : 'bg-white dark:bg-gray-800/80 border-gray-200 dark:border-gray-700/80 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300'
-                  }`}
-                >
-                  <CategoryIcon name={cat.icon} className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-primary'}`} />
-                  <span>{cat.name}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Subcategories Carousel if category is selected */}
-          {activeCategoryObj && activeCategoryObj.subcategories && activeCategoryObj.subcategories.length > 0 && (
-            <div className="flex items-center gap-1.5 overflow-x-auto pt-3 mt-2 border-t border-dashed border-gray-100 dark:border-gray-800/80 no-scrollbar">
-              <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 whitespace-nowrap ml-2">زیردسته‌ها:</span>
-              <button
-                onClick={() => handleSelectSubCategory('ALL')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] whitespace-nowrap transition-colors ${
-                  activeSubCategory === 'ALL'
-                    ? 'bg-red-100 dark:bg-red-950/60 text-primary font-bold'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                key={cat.id}
+                onClick={() => handleSelectCategory(cat.id)}
+                className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all flex items-center gap-2 border ${
+                  isSelected
+                    ? 'bg-primary text-white border-primary font-semibold'
+                    : 'bg-surface dark:bg-gray-800/80 border-border dark:border-gray-700 text-text-secondary dark:text-gray-300 hover:bg-canvas dark:hover:bg-gray-800'
                 }`}
               >
-                همه
+                <CategoryIcon name={cat.icon} className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-primary'}`} />
+                <span>{cat.name}</span>
               </button>
-              {activeCategoryObj.subcategories.map((sub) => {
-                const isSubSel = activeSubCategory === sub.id;
-                return (
-                  <button
-                    key={sub.id}
-                    onClick={() => handleSelectSubCategory(sub.id)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] whitespace-nowrap transition-colors ${
-                      isSubSel
-                        ? 'bg-red-100 dark:bg-red-950/60 text-primary font-bold'
-                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                    }`}
-                  >
-                    {sub.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+            );
+          })}
         </div>
+
+        {activeCategoryObj && activeCategoryObj.subcategories && activeCategoryObj.subcategories.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pt-3 mt-3 border-t border-border dark:border-gray-800 no-scrollbar">
+            <span className="text-xs font-medium text-text-muted whitespace-nowrap ml-2">زیردسته:</span>
+            <button
+              onClick={() => handleSelectSubCategory('ALL')}
+              className={`px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-colors ${
+                activeSubCategory === 'ALL'
+                  ? 'bg-primary-light dark:bg-red-950/40 text-primary font-semibold'
+                  : 'text-text-secondary hover:bg-canvas dark:hover:bg-gray-800'
+              }`}
+            >
+              همه
+            </button>
+            {activeCategoryObj.subcategories.map((sub) => (
+              <button
+                key={sub.id}
+                onClick={() => handleSelectSubCategory(sub.id)}
+                className={`px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-colors ${
+                  activeSubCategory === sub.id
+                    ? 'bg-primary-light dark:bg-red-950/40 text-primary font-semibold'
+                    : 'text-text-secondary hover:bg-canvas dark:hover:bg-gray-800'
+                }`}
+              >
+                {sub.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Main Content Area */}
-      <div className="space-y-4">
-        
-        {/* Feed Header: Title, Counts, Sorting, View Toggle */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
-          <div>
-            <h1 className="font-bold text-base sm:text-lg text-gray-900 dark:text-white flex items-center gap-2">
-              <span>آگهی‌های {selectedCity && selectedCity !== 'ALL' ? selectedCity : 'سراسر آلمان'}</span>
-              {activeCategoryObj && (
-                <>
-                  <span className="text-gray-300 dark:text-gray-700">•</span>
-                  <span className="text-primary font-bold">{activeCategoryObj.name}</span>
-                </>
-              )}
-            </h1>
-            <p className="text-xs text-gray-400 mt-0.5">
-              نمایش <span className="dir-ltr inline-block font-mono">{toPersianDigits(filteredAds.length)}</span> آگهی فعال
-            </p>
-          </div>
+      <div className="lg:grid lg:grid-cols-[240px_1fr] lg:gap-6 items-start">
+        {/* Desktop Filter Sidebar */}
+        <aside className="hidden lg:block sticky top-24 bg-surface dark:bg-gray-900 rounded-2xl p-4 border border-border dark:border-gray-800 shadow-card space-y-4">
+          <h2 className="text-sm font-semibold text-text-primary dark:text-white flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4 text-primary" />
+            فیلتر
+          </h2>
+          <ListingFilters
+            currencyFilter={currencyFilter}
+            setCurrencyFilter={setCurrencyFilter}
+            onlyPhotos={onlyPhotos}
+            setOnlyPhotos={setOnlyPhotos}
+            minPrice={minPrice}
+            setMinPrice={setMinPrice}
+            maxPrice={maxPrice}
+            setMaxPrice={setMaxPrice}
+            onClear={clearAdvancedFilters}
+            resultCount={filteredAds.length}
+          />
+        </aside>
 
-          <div className="flex items-center gap-3 self-end sm:self-auto">
-            {/* Sort Select */}
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <ArrowUpDown className="w-3.5 h-3.5 text-gray-400" />
+        <div className="space-y-4 min-w-0">
+          {/* Page header + controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-text-primary dark:text-white">{pageTitle}</h1>
+              <p className="text-sm text-text-secondary dark:text-gray-400 mt-1">
+                {toPersianDigits(filteredAds.length)} آگهی
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setIsFilterModalOpen(true)}
+                className="lg:hidden flex items-center gap-2 px-3 py-2 rounded-xl border border-border dark:border-gray-700 bg-surface dark:bg-gray-800 text-xs font-semibold text-text-secondary"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                فیلتر
+                {activeFiltersCount > 0 && (
+                  <span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] flex items-center justify-center">
+                    {toPersianDigits(activeFiltersCount)}
+                  </span>
+                )}
+              </button>
+
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-2.5 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 outline-none cursor-pointer focus:border-primary"
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                aria-label="مرتب‌سازی"
+                className="bg-canvas dark:bg-gray-800 border border-border dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-medium text-text-secondary dark:text-gray-200 outline-none cursor-pointer focus:border-primary"
               >
                 <option value="newest">جدیدترین</option>
                 <option value="price_asc">ارزان‌ترین</option>
                 <option value="price_desc">گران‌ترین</option>
                 <option value="views">پربازدیدترین</option>
               </select>
-            </div>
 
-            {/* View Mode Toggle */}
-            <div className="flex items-center p-0.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  viewMode === 'grid'
-                    ? 'bg-white dark:bg-gray-700 text-primary shadow-xs'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                }`}
-                title="نمای شبکه‌ای"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-white dark:bg-gray-700 text-primary shadow-xs'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                }`}
-                title="نمای لیستی"
-              >
-                <List className="w-4 h-4" />
-              </button>
+              <div className="flex items-center p-0.5 rounded-xl bg-canvas dark:bg-gray-800 border border-border dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  aria-label="نمای شبکه‌ای"
+                  className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-surface dark:bg-gray-700 text-primary shadow-card' : 'text-text-muted'}`}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  aria-label="نمای لیستی"
+                  className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-surface dark:bg-gray-700 text-primary shadow-card' : 'text-text-muted'}`}
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
         {/* Active Filter Chips */}
         {activeFiltersCount > 0 && (
@@ -474,20 +425,20 @@ export const Home: React.FC = () => {
               </span>
             )}
             {currencyFilter !== 'ALL' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-medium">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary-light dark:bg-red-950/40 border border-border text-primary text-xs font-medium">
                 ارز: {currencyFilter === 'EUR' ? 'یورو' : 'تومان'}
-                <button onClick={() => setCurrencyFilter('ALL')}><X className="w-3 h-3" /></button>
+                <button type="button" onClick={() => setCurrencyFilter('ALL')} aria-label="حذف فیلتر"><X className="w-3 h-3" /></button>
               </span>
             )}
             {onlyPhotos && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-medium">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-canvas dark:bg-gray-800 border border-border text-text-secondary text-xs font-medium">
                 فقط عکس‌دار
-                <button onClick={() => setOnlyPhotos(false)}><X className="w-3 h-3" /></button>
+                <button type="button" onClick={() => setOnlyPhotos(false)} aria-label="حذف فیلتر"><X className="w-3 h-3" /></button>
               </span>
             )}
             <button
               onClick={handleResetFilters}
-              className="text-xs text-primary hover:underline font-semibold mr-1 flex items-center gap-1"
+              className="text-xs text-primary hover:underline font-semibold flex items-center gap-1"
             >
               <RotateCcw className="w-3 h-3" />
               <span>حذف همه فیلترها</span>
@@ -495,174 +446,55 @@ export const Home: React.FC = () => {
           </div>
         )}
 
-        {/* Ads Grid / List */}
         {filteredAds.length === 0 ? (
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-12 text-center border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
-            <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-950/40 text-primary flex items-center justify-center mx-auto">
-              <Search className="w-8 h-8 stroke-1" />
-            </div>
-            <div>
-              <h3 className="font-bold text-lg text-gray-900 dark:text-white">آگهی مورد نظر پیدا نشد</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-md mx-auto">
-                هیچ آگهی با فیلترهای انتخابی شما در این ایالت/شهر یافت نشد. می‌توانید فیلترها را حذف کنید یا عبارت دیگری را جستجو فرمایید.
-              </p>
-            </div>
-            <button
-              onClick={handleResetFilters}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-md hover:bg-secondary transition-all"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>مشاهده تمامی آگهی‌ها</span>
-            </button>
-          </div>
+          <EmptyState
+            icon={Search}
+            title="هیچ آگهی‌ای پیدا نشد"
+            description="فیلترها یا عبارت جستجو را تغییر دهید."
+            actionLabel="پاک کردن فیلترها"
+            onAction={handleResetFilters}
+          />
         ) : (
-          <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4' : 'space-y-3'}>
+          <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-3'}>
             {filteredAds.map((ad) => (
               <AdCard key={ad.id} ad={ad} viewMode={viewMode} />
             ))}
           </div>
         )}
+        </div>
       </div>
 
-      {/* Advanced Filter Modal */}
-      {isFilterModalOpen && (
-        <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in"
-          onClick={() => setIsFilterModalOpen(false)}
-        >
-          <div 
-            className="bg-white dark:bg-gray-900 w-full max-w-md rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <SlidersHorizontal className="w-4 h-4 text-primary" />
-                <span className="font-bold text-sm">فیلترهای پیشرفته</span>
-              </div>
-              <button
-                onClick={() => setIsFilterModalOpen(false)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-5 overflow-y-auto space-y-5 flex-1">
-              {/* Currency Selector */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
-                  واحد پول آگهی
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCurrencyFilter('ALL')}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-colors ${
-                      currencyFilter === 'ALL'
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    همه
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCurrencyFilter('EUR')}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-colors flex items-center justify-center gap-1 ${
-                      currencyFilter === 'EUR'
-                        ? 'bg-emerald-600 text-white border-emerald-600'
-                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    <Euro className="w-3.5 h-3.5" />
-                    <span>یورو (€)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCurrencyFilter('TOMAN')}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-colors flex items-center justify-center gap-1 ${
-                      currencyFilter === 'TOMAN'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    <Coins className="w-3.5 h-3.5" />
-                    <span>تومان</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Photo toggle */}
-              <div className="space-y-3">
-                <label className="flex items-center justify-between p-3 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                  <div className="flex items-center gap-2 text-xs font-medium">
-                    <Camera className="w-4 h-4 text-gray-500" />
-                    <span>فقط آگهی‌های دارای عکس</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={onlyPhotos}
-                    onChange={(e) => setOnlyPhotos(e.target.checked)}
-                    className="w-4 h-4 text-primary rounded focus:ring-primary accent-primary"
-                  />
-                </label>
-              </div>
-
-              {/* Price Range */}
-              <div>
-                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">
-                  محدوده قیمت
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="text-[10px] text-gray-400 block mb-1">حداقل مبلغ:</span>
-                    <input
-                      type="number"
-                      placeholder="مثلاً 50"
-                      value={minPrice}
-                      onChange={(e) => setMinPrice(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs outline-none focus:border-primary dir-ltr text-left font-mono"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-gray-400 block mb-1">حداکثر مبلغ:</span>
-                    <input
-                      type="number"
-                      placeholder="مثلاً 2000"
-                      value={maxPrice}
-                      onChange={(e) => setMaxPrice(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs outline-none focus:border-primary dir-ltr text-left font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setOnlyPhotos(false);
-                  setCurrencyFilter('ALL');
-                  setMinPrice('');
-                  setMaxPrice('');
-                }}
-                className="text-xs text-gray-500 hover:text-primary"
-              >
-                پاک کردن فیلترها
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsFilterModalOpen(false)}
-                className="px-6 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-md hover:bg-secondary"
-              >
-                اعمال فیلترها ({toPersianDigits(filteredAds.length)} آگهی)
-              </button>
-            </div>
+      <Modal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        title="فیلترها"
+        mobileDrawer
+        footer={
+          <div className="flex items-center justify-between gap-3">
+            <button type="button" onClick={clearAdvancedFilters} className="text-xs text-text-secondary hover:text-primary">
+              پاک کردن
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsFilterModalOpen(false)}
+              className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs font-semibold"
+            >
+              نمایش {toPersianDigits(filteredAds.length)} نتیجه
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <ListingFilters
+          currencyFilter={currencyFilter}
+          setCurrencyFilter={setCurrencyFilter}
+          onlyPhotos={onlyPhotos}
+          setOnlyPhotos={setOnlyPhotos}
+          minPrice={minPrice}
+          setMinPrice={setMinPrice}
+          maxPrice={maxPrice}
+          setMaxPrice={setMaxPrice}
+        />
+      </Modal>
     </div>
   );
 };
