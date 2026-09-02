@@ -1106,7 +1106,15 @@ export const AdminDashboard: React.FC = () => {
               <div className="flex flex-wrap items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
                 <span>قیمت: <strong>{formatPrice(previewAd.price, previewAd.isNegotiable, previewAd.isFree, previewAd.currency)}</strong></span>
                 <span>شهر: <strong>{previewAd.city} ({previewAd.district || 'مرکز'})</strong></span>
-                <span>تلفن: <strong className="dir-ltr text-left font-mono">{previewAd.contactPhone}</strong></span>
+                {previewAd.showPhone !== false && (
+                  <span>تلفن: <strong className="dir-ltr text-left font-mono">{previewAd.contactPhone}</strong></span>
+                )}
+                {previewAd.showTelegram && previewAd.telegramId && (
+                  <span>تلگرام: <strong className="dir-ltr text-left font-mono">@{previewAd.telegramId.replace(/^@+/, '')}</strong></span>
+                )}
+                {previewAd.allowWhatsapp === true && (
+                  <span className="text-emerald-600 font-bold text-xs">واتس‌اپ فعال</span>
+                )}
               </div>
 
               <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl leading-relaxed whitespace-pre-line text-gray-700 dark:text-gray-300">

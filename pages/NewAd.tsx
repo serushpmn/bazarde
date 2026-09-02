@@ -19,7 +19,8 @@ import {
   Coins,
   MessageCircle,
   Loader2,
-  Lock
+  Lock,
+  Send
 } from 'lucide-react';
 
 export const NewAd: React.FC = () => {
@@ -43,7 +44,10 @@ export const NewAd: React.FC = () => {
   const [isNegotiable, setIsNegotiable] = useState(false);
   const [isFree, setIsFree] = useState(false);
   const [description, setDescription] = useState('');
-  const [allowWhatsapp, setAllowWhatsapp] = useState(true);
+  const [showPhone, setShowPhone] = useState(true);
+  const [allowWhatsapp, setAllowWhatsapp] = useState(false);
+  const [showTelegram, setShowTelegram] = useState(false);
+  const [telegramId, setTelegramId] = useState('');
   const [images, setImages] = useState<string[]>([]);
 
   const [attributes, setAttributes] = useState<{ key: string; value: string }[]>([
@@ -81,7 +85,10 @@ export const NewAd: React.FC = () => {
       setIsNegotiable(Boolean(existingAd.isNegotiable));
       setIsFree(Boolean(existingAd.isFree));
       setDescription(existingAd.description);
-      setAllowWhatsapp(existingAd.allowWhatsapp !== false);
+      setShowPhone(existingAd.showPhone !== false);
+      setAllowWhatsapp(existingAd.allowWhatsapp === true);
+      setShowTelegram(Boolean(existingAd.showTelegram && existingAd.telegramId));
+      setTelegramId(existingAd.telegramId || '');
       setImages(existingAd.images || []);
       setAttributes(
         existingAd.attributes
@@ -132,11 +139,30 @@ export const NewAd: React.FC = () => {
     setAttributes(attributes.filter((_, i) => i !== idx));
   };
 
-  const resolveAdStatus = (existingStatus?: AdStatus): AdStatus => {
+  const adContentRequiresReview = (
+    existing: Ad,
+    updated: { title: string; description: string; images: string[] }
+  ): boolean => {
+    if (existing.title.trim() !== updated.title.trim()) return true;
+    if (existing.description.trim() !== updated.description.trim()) return true;
+    if (existing.images.length !== updated.images.length) return true;
+    return existing.images.some((img, i) => img !== updated.images[i]);
+  };
+
+  const resolveAdStatus = (
+    existingAd: Ad | undefined,
+    contentChanged: boolean
+  ): AdStatus => {
     if (isStaff) {
-      return existingStatus || AdStatus.APPROVED;
+      return existingAd?.status || AdStatus.APPROVED;
     }
-    return AdStatus.PENDING;
+    if (!existingAd) {
+      return AdStatus.PENDING;
+    }
+    if (contentChanged) {
+      return AdStatus.PENDING;
+    }
+    return existingAd.status;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -162,6 +188,16 @@ export const NewAd: React.FC = () => {
       return;
     }
 
+    const normalizedTelegram = telegramId.trim().replace(/^@+/, '');
+    if (showTelegram && !normalizedTelegram) {
+      setErrorMsg('آیدی تلگرام را وارد کنید یا تیک «نمایش تلگرام» را بردارید.');
+      return;
+    }
+    if (!showPhone && !allowWhatsapp && !(showTelegram && normalizedTelegram)) {
+      setErrorMsg('حداقل یک راه ارتباطی (تماس، واتس‌اپ یا تلگرام) را انتخاب کنید.');
+      return;
+    }
+
     const numPrice = isFree || isNegotiable ? 0 : parseInt(price.replace(/,/g, ''), 10) || 0;
     const existingAd = isEditMode && editId ? StorageService.getAdById(editId) : undefined;
 
@@ -174,13 +210,23 @@ export const NewAd: React.FC = () => {
       }
     });
 
-    const adStatus = resolveAdStatus(existingAd?.status);
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
+    const contentChanged = existingAd
+      ? adContentRequiresReview(existingAd, {
+          title: trimmedTitle,
+          description: trimmedDescription,
+          images,
+        })
+      : true;
+
+    const adStatus = resolveAdStatus(existingAd, contentChanged);
 
     const newAd: Ad = {
       id: isEditMode && editId ? editId : `ad-${Date.now()}`,
       userId: existingAd?.userId || user.id,
-      title: title.trim(),
-      description: description.trim(),
+      title: trimmedTitle,
+      description: trimmedDescription,
       price: numPrice,
       currency,
       isNegotiable,
@@ -194,10 +240,17 @@ export const NewAd: React.FC = () => {
       status: adStatus,
       createdAt: existingAd?.createdAt || Date.now(),
       contactPhone: userPhone,
+      showPhone,
       whatsappPhone: allowWhatsapp ? userPhone : undefined,
       allowWhatsapp,
+      telegramId: showTelegram && normalizedTelegram ? normalizedTelegram : undefined,
+      showTelegram: showTelegram && Boolean(normalizedTelegram),
       viewsCount: existingAd?.viewsCount || 0,
-      attributes: Object.keys(attributesMap).length > 0 ? attributesMap : undefined
+      attributes: Object.keys(attributesMap).length > 0 ? attributesMap : undefined,
+      rejectionReason:
+        contentChanged && adStatus === AdStatus.PENDING
+          ? undefined
+          : existingAd?.rejectionReason,
     };
 
     StorageService.saveAd(newAd);
@@ -226,10 +279,22 @@ export const NewAd: React.FC = () => {
       StorageService.addNotification({
         userId: user.id,
         title: 'آگهی ویرایش شد',
-        message: `تغییرات آگهی «${newAd.title}» ثبت شد و مجدداً در صف بررسی ناظر قرار گرفت.`,
+        message: contentChanged
+          ? `تغییرات آگهی «${newAd.title}» ثبت شد و به‌دلیل تغییر عنوان، توضیحات یا تصاویر در صف بررسی ناظر قرار گرفت.`
+          : `تغییرات آگهی «${newAd.title}» ذخیره شد.`,
         type: 'INFO',
         link: '/profile?tab=my_ads'
       });
+
+      if (contentChanged) {
+        StorageService.addNotification({
+          userId: 'ADMIN',
+          title: 'آگهی ویرایش‌شده نیاز به بررسی',
+          message: `آگهی «${newAd.title}» توسط ${user.name} ویرایش شد و نیاز به تایید مجدد دارد.`,
+          type: 'WARNING',
+          link: '/admin?tab=ads'
+        });
+      }
     }
 
     setIsSubmitting(false);
@@ -275,7 +340,7 @@ export const NewAd: React.FC = () => {
             {isEditMode
               ? isStaff
                 ? 'تغییرات خود را ذخیره کنید.'
-                : 'پس از ویرایش، آگهی مجدداً برای بررسی ناظر ارسال می‌شود.'
+                : 'تغییر عنوان، توضیحات یا تصاویر نیاز به بررسی مجدد دارد. سایر تغییرات (قیمت، شهر، تماس و...) بلافاصله اعمال می‌شوند.'
               : isStaff
                 ? 'مشخصات آگهی را تکمیل کنید تا منتشر شود.'
                 : 'پس از ثبت، آگهی شما در صف بررسی ناظر قرار می‌گیرد و پس از تایید منتشر می‌شود.'}
@@ -584,39 +649,97 @@ export const NewAd: React.FC = () => {
           </div>
 
           <div className="p-4 sm:p-5 rounded-3xl bg-gray-50 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800 space-y-4">
-            <h3 className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
-              <Phone className="w-4 h-4 text-primary" />
-              <span>شماره تماس و واتس‌اپ</span>
-            </h3>
-
-            <div className="p-3.5 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 space-y-2">
-              <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-500 dark:text-gray-400">
-                <Lock className="w-3.5 h-3.5" />
-                <span>شماره موبایل حساب شما (غیرقابل تغییر در آگهی)</span>
-              </div>
-              <div
-                dir="ltr"
-                className="font-black text-base text-primary font-mono text-left [unicode-bidi:plaintext]"
-              >
-                {userPhone}
-              </div>
-              <p className="text-[11px] text-gray-400 leading-relaxed">
-                شماره واتس‌اپ همان شماره موبایل ثبت‌شده در حساب کاربری شماست.
+            <div>
+              <h3 className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                <Phone className="w-4 h-4 text-primary" />
+                <span>راه‌های ارتباط با خریدار</span>
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                حداقل یک روش را انتخاب کنید. می‌توانید شماره تماس را مخفی کرده و فقط از تلگرام استفاده کنید.
               </p>
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={allowWhatsapp}
-                onChange={e => setAllowWhatsapp(e.target.checked)}
-                className="w-4 h-4 text-emerald-600 rounded accent-emerald-600"
-              />
-              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                <MessageCircle className="w-4 h-4" />
-                <span>نمایش دکمه پیام در واتس‌اپ برای این آگهی</span>
-              </div>
-            </label>
+            {/* نمایش شماره تماس */}
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 space-y-3">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showPhone}
+                  onChange={(e) => setShowPhone(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 text-primary rounded accent-primary"
+                />
+                <div className="flex-1">
+                  <span className="text-xs font-bold text-gray-900 dark:text-white">نمایش شماره تماس</span>
+                  <p className="text-[11px] text-gray-500 mt-0.5">شماره موبایل در پاپ‌آپ تماس نمایش داده می‌شود.</p>
+                </div>
+              </label>
+              {showPhone && (
+                <div className="pr-6 space-y-1">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>شماره حساب شما (غیرقابل تغییر)</span>
+                  </div>
+                  <div dir="ltr" className="font-bold text-sm text-primary font-mono text-left [unicode-bidi:plaintext]">
+                    {userPhone}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* واتس‌اپ */}
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allowWhatsapp}
+                  onChange={(e) => setAllowWhatsapp(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 text-primary rounded accent-primary"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-white">
+                    <MessageCircle className="w-4 h-4 text-primary" />
+                    <span>نمایش واتس‌اپ</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-0.5">دکمه پیام در واتس‌اپ با همان شماره حساب شما.</p>
+                </div>
+              </label>
+            </div>
+
+            {/* تلگرام */}
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 space-y-3">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showTelegram}
+                  onChange={(e) => {
+                    setShowTelegram(e.target.checked);
+                    if (!e.target.checked) setTelegramId('');
+                  }}
+                  className="w-4 h-4 mt-0.5 text-primary rounded accent-primary"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-white">
+                    <Send className="w-4 h-4 text-primary" />
+                    <span>نمایش آیدی تلگرام</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-0.5">برای کسانی که ترجیح می‌دهند شماره نمایش داده نشود.</p>
+                </div>
+              </label>
+              {showTelegram && (
+                <div className="pr-6">
+                  <label className="block text-[11px] text-gray-500 mb-1">آیدی تلگرام (username)</label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    placeholder="مثلاً: my_username"
+                    value={telegramId}
+                    onChange={(e) => setTelegramId(e.target.value.replace(/\s/g, ''))}
+                    className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs outline-none focus:border-primary font-mono text-left"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">بدون @ هم قابل قبول است.</p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-end gap-3">

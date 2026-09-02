@@ -52,8 +52,11 @@ export interface Ad {
   status: AdStatus;
   createdAt: number;
   contactPhone: string;
+  showPhone?: boolean;
   whatsappPhone?: string;
   allowWhatsapp?: boolean;
+  telegramId?: string;
+  showTelegram?: boolean;
   rejectionReason?: string;
   viewsCount?: number;
   isVerifiedSeller?: boolean;

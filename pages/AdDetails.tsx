@@ -8,7 +8,9 @@ import {
   numberToPersianWords,
   getTimeAgo,
   toPersianDigits,
-  getWhatsAppUrl
+  getWhatsAppUrl,
+  getTelegramUrl,
+  formatTelegramId,
 } from '../lib/formatters';
 import AdCard from '../components/AdCard';
 import AdImage from '../components/AdImage';
@@ -37,8 +39,8 @@ import {
   Lock,
   LogIn,
   PhoneCall,
-  ExternalLink,
   Flag,
+  Send,
 } from 'lucide-react';
 
 export const AdDetails: React.FC = () => {
@@ -54,6 +56,7 @@ export const AdDetails: React.FC = () => {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
+  const [copiedTelegram, setCopiedTelegram] = useState(false);
 
   // Contact / Deposit Warning Modal
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
@@ -168,6 +171,10 @@ export const AdDetails: React.FC = () => {
 
   const verbalPrice = ad.price > 0 ? numberToPersianWords(ad.price, ad.currency) : '';
   const whatsappLink = getWhatsAppUrl(ad.whatsappPhone || ad.contactPhone, ad.title);
+  const telegramLink = ad.telegramId ? getTelegramUrl(ad.telegramId) : '';
+  const showPhoneContact = ad.showPhone !== false && Boolean(ad.contactPhone);
+  const showWhatsappContact = ad.allowWhatsapp === true && Boolean(ad.whatsappPhone || ad.contactPhone);
+  const showTelegramContact = Boolean(ad.showTelegram && ad.telegramId);
   const images = hasValidAdImage(ad.images) ? ad.images.filter((image) => image && image.trim()) : [];
 
   const handleBookmarkToggle = () => {
@@ -204,6 +211,14 @@ export const AdDetails: React.FC = () => {
       navigator.clipboard.writeText(ad.contactPhone);
       setCopiedPhone(true);
       setTimeout(() => setCopiedPhone(false), 2500);
+    }
+  };
+
+  const handleCopyTelegram = () => {
+    if (ad.telegramId) {
+      navigator.clipboard.writeText(formatTelegramId(ad.telegramId));
+      setCopiedTelegram(true);
+      setTimeout(() => setCopiedTelegram(false), 2500);
     }
   };
 
@@ -518,7 +533,7 @@ export const AdDetails: React.FC = () => {
 
             <button type="button" onClick={() => setIsContactModalOpen(true)} className={`${btnPrimary} w-full h-14 text-base`}>
               <Phone className="w-5 h-5" />
-              نمایش شماره تماس
+              {showPhoneContact ? 'نمایش شماره تماس' : showTelegramContact ? 'نمایش تلگرام' : 'اطلاعات تماس'}
             </button>
 
             <div className="flex gap-2">
@@ -634,7 +649,7 @@ export const AdDetails: React.FC = () => {
           className={`${btnPrimary} flex-1 max-w-[220px] h-12 text-sm`}
         >
           <Phone className="w-4 h-4" />
-          تماس با فروشنده
+          {showPhoneContact ? 'تماس با فروشنده' : showTelegramContact ? 'تلگرام' : 'اطلاعات تماس'}
         </button>
       </div>
 
@@ -688,152 +703,148 @@ export const AdDetails: React.FC = () => {
       {/* ============================================================ */}
       {isContactModalOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 bg-black/50 backdrop-blur-sm animate-in fade-in"
           onClick={() => setIsContactModalOpen(false)}
         >
           <div
-            className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95"
+            className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden animate-in zoom-in-95"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/40">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                  <Phone className="w-4 h-4" />
-                </div>
-                <h3 className="font-black text-sm text-gray-900 dark:text-white">
-                  اطلاعات تماس آگهی‌دهنده
-                </h3>
-              </div>
+            <div className="px-3.5 py-2.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+              <h3 className="font-bold text-sm text-gray-900 dark:text-white">اطلاعات تماس</h3>
               <button
                 onClick={() => setIsContactModalOpen(false)}
-                className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                aria-label="بستن"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 no-scrollbar">
-              
-              {/* Advance Payment / Deposit Warning Box (هشدار پرداخت بیعانه) */}
-              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 space-y-2">
-                <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-xs sm:text-sm">
-                  <ShieldAlert className="w-4 h-4 flex-shrink-0 text-primary" />
-                  <span>هشدار بسیار مهم: هرگز بیعانه پرداخت نکنید!</span>
-                </div>
-                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                  تحت هیچ عنوان و به هیچ بهانه‌ای (رزرو مسکن، پست کردن کلید، نگه داشتن کالا یا تخفیف ویژه) قبل از رویت حضوری و اطمینان از سلامت کالا، بیعانه یا ودیعه (Kaution) واریز نکنید.
-                </p>
-                <div className="pt-1">
-                  <Link
-                    to="/safety"
-                    onClick={() => setIsContactModalOpen(false)}
-                    className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
-                  >
-                    <span>مطالعه روش‌های رایج کلاهبرداری در آلمان ←</span>
+            <div className="p-3.5 space-y-3">
+              <div className="flex gap-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/40">
+                <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-amber-600 mt-0.5" />
+                <p className="text-[10px] text-amber-900/80 dark:text-amber-200/80 leading-relaxed">
+                  قبل از دیدن کالا بیعانه نپردازید.{' '}
+                  <Link to="/safety" onClick={() => setIsContactModalOpen(false)} className="font-bold text-primary hover:underline">
+                    راهنمای امنیت
                   </Link>
-                </div>
+                </p>
               </div>
 
-              {/* User Logged-in vs Guest State */}
               {user ? (
-                <div className="space-y-4">
-                  {/* Phone Number Display Box */}
-                  <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 space-y-3">
-                    <div className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
-                      شماره تماس فروشنده:
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span
-                        dir="ltr"
-                        className="font-black text-lg sm:text-xl tracking-wider text-primary font-mono text-left [unicode-bidi:plaintext]"
-                      >
-                        {ad.contactPhone}
-                      </span>
-                      
-                      {/* Copy Phone Button */}
-                      <button
-                        onClick={handleCopyPhone}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
-                          copiedPhone
-                            ? 'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-300'
-                            : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100'
-                        }`}
-                      >
-                        {copiedPhone ? (
-                          <>
-                            <Check className="w-4 h-4 text-emerald-600" />
-                            <span>کپی شد!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-4 h-4" />
-                            <span>کپی شماره</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                <>
+                  {(showPhoneContact || showTelegramContact) && (
+                    <div className="space-y-2">
+                      {showPhoneContact && (
+                        <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700">
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-gray-500 mb-0.5">شماره</p>
+                            <span dir="ltr" className="font-bold text-sm text-primary font-mono block truncate text-left [unicode-bidi:plaintext]">
+                              {ad.contactPhone}
+                            </span>
+                          </div>
+                          <button
+                            onClick={handleCopyPhone}
+                            aria-label={copiedPhone ? 'کپی شد' : 'کپی شماره'}
+                            title={copiedPhone ? 'کپی شد' : 'کپی شماره'}
+                            className={`w-9 h-9 shrink-0 rounded-lg border flex items-center justify-center transition-all ${
+                              copiedPhone
+                                ? 'bg-emerald-50 border-emerald-300 text-emerald-600'
+                                : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 hover:bg-gray-100'
+                            }`}
+                          >
+                            {copiedPhone ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      )}
 
-                    {/* Direct Call Button */}
-                    <a
-                      href={`tel:${ad.contactPhone}`}
-                      className="w-full py-3 rounded-xl bg-primary hover:bg-secondary text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2"
-                    >
-                      <PhoneCall className="w-4 h-4" />
-                      <span>تماس مستقیم تلفنی</span>
-                    </a>
-                  </div>
-
-                  {/* Direct WhatsApp Button */}
-                  {ad.allowWhatsapp !== false && (
-                    <a
-                      href={whatsappLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full py-3 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-bold text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-2"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      <span>ارسال پیام در واتس‌اپ (WhatsApp)</span>
-                      <ExternalLink className="w-3.5 h-3.5 opacity-60" />
-                    </a>
+                      {showTelegramContact && (
+                        <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700">
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-gray-500 mb-0.5">تلگرام</p>
+                            <span dir="ltr" className="font-bold text-sm text-primary font-mono block truncate text-left">
+                              {formatTelegramId(ad.telegramId!)}
+                            </span>
+                          </div>
+                          <button
+                            onClick={handleCopyTelegram}
+                            aria-label={copiedTelegram ? 'کپی شد' : 'کپی آیدی'}
+                            title={copiedTelegram ? 'کپی شد' : 'کپی آیدی'}
+                            className={`w-9 h-9 shrink-0 rounded-lg border flex items-center justify-center transition-all ${
+                              copiedTelegram
+                                ? 'bg-emerald-50 border-emerald-300 text-emerald-600'
+                                : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 hover:bg-gray-100'
+                            }`}
+                          >
+                            {copiedTelegram ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
 
-                </div>
+                  {(showPhoneContact || showWhatsappContact || showTelegramContact) && (
+                    <div className="flex items-center justify-center gap-2 pt-0.5">
+                      {showPhoneContact && (
+                        <a
+                          href={`tel:${ad.contactPhone}`}
+                          aria-label="تماس مستقیم"
+                          title="تماس مستقیم"
+                          className="w-11 h-11 rounded-xl bg-primary hover:bg-primary-hover text-white flex items-center justify-center shadow-sm transition-colors"
+                        >
+                          <PhoneCall className="w-5 h-5" />
+                        </a>
+                      )}
+                      {showWhatsappContact && (
+                        <a
+                          href={whatsappLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="واتس‌اپ"
+                          title="واتس‌اپ"
+                          className="w-11 h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-emerald-600 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <MessageCircle className="w-5 h-5" />
+                        </a>
+                      )}
+                      {showTelegramContact && (
+                        <a
+                          href={telegramLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="تلگرام"
+                          title="تلگرام"
+                          className="w-11 h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sky-500 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <Send className="w-5 h-5" />
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {!showPhoneContact && !showWhatsappContact && !showTelegramContact && (
+                    <p className="text-xs text-gray-500 text-center py-2">راه ارتباطی ثبت نشده است.</p>
+                  )}
+                </>
               ) : (
-                /* Guest State */
-                <div className="p-5 rounded-2xl bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 text-center space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
-                    <Lock className="w-6 h-6" />
+                <div className="py-3 text-center space-y-2.5">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                    <Lock className="w-5 h-5" />
                   </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-gray-900 dark:text-white">
-                      جهت مشاهده اطلاعات تماس وارد شوید
-                    </h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-                      برای محافظت از حریم خصوصی آگهی‌دهندگان، شماره تلفن و راه‌های ارتباطی فقط به کاربران عضو نمایش داده می‌شود.
-                    </p>
-                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed px-2">
+                    برای مشاهده اطلاعات تماس وارد شوید.
+                  </p>
                   <Link
                     to="/login"
                     onClick={() => setIsContactModalOpen(false)}
-                    className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-primary hover:bg-secondary text-white text-xs font-bold shadow-md transition-all"
+                    className="inline-flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs font-bold transition-all"
                   >
                     <LogIn className="w-4 h-4" />
-                    <span>ورود / ثبت‌نام رایگان در ۱ دقیقه</span>
+                    <span>ورود / ثبت‌نام</span>
                   </Link>
                 </div>
               )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex justify-end">
-              <button
-                onClick={() => setIsContactModalOpen(false)}
-                className="px-5 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800 rounded-xl transition-colors"
-              >
-                بستن
-              </button>
             </div>
           </div>
         </div>

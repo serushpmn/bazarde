@@ -135,6 +135,20 @@ export const getWhatsAppUrl = (phone: string, adTitle?: string): string => {
   return `https://wa.me/${cleanDigits}?text=${encodeURIComponent(message)}`;
 };
 
+export const normalizeTelegramId = (id: string): string =>
+  id.trim().replace(/^@+/, '');
+
+export const getTelegramUrl = (telegramId: string): string => {
+  const username = normalizeTelegramId(telegramId);
+  if (!username) return '';
+  return `https://t.me/${username}`;
+};
+
+export const formatTelegramId = (telegramId: string): string => {
+  const username = normalizeTelegramId(telegramId);
+  return username ? `@${username}` : '';
+};
+
 export const getConditionLabel = (_condition?: string): { text: string; bg: string; color: string } | null => {
   return null;
 };

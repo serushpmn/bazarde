@@ -1,6 +1,6 @@
 import React from 'react';
 import { Ad, AdStatus, User } from '../types';
-import { CheckCircle2, Phone, Shield } from 'lucide-react';
+import { CheckCircle2, Phone, Shield, Send, MessageCircle } from 'lucide-react';
 import { getTimeAgo } from '../lib/formatters';
 import { caption } from '../lib/designTokens';
 
@@ -12,10 +12,24 @@ interface TrustSignalsProps {
 export const TrustSignals: React.FC<TrustSignalsProps> = ({ ad, seller }) => {
   const signals: { icon: React.ReactNode; text: string }[] = [];
 
-  if (seller?.phone) {
+  if (ad.showPhone !== false && ad.contactPhone) {
     signals.push({
       icon: <Phone className="w-3.5 h-3.5" />,
-      text: 'شماره تماس ثبت‌شده',
+      text: 'تماس تلفنی فعال',
+    });
+  }
+
+  if (ad.showTelegram && ad.telegramId) {
+    signals.push({
+      icon: <Send className="w-3.5 h-3.5" />,
+      text: 'تلگرام فعال',
+    });
+  }
+
+  if (ad.allowWhatsapp === true && ad.contactPhone) {
+    signals.push({
+      icon: <MessageCircle className="w-3.5 h-3.5" />,
+      text: 'واتس‌اپ فعال',
     });
   }
 
