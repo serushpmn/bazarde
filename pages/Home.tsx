@@ -4,7 +4,6 @@ import { StorageService } from '../services/storage';
 import { Ad, AdStatus, Category, Banner } from '../types';
 import { useCity } from '../App';
 import AdCard from '../components/AdCard';
-import { CategoryIcon } from '../components/CategoryIcon';
 import { ListingFilters } from '../components/ListingFilters';
 import EmptyState from '../components/ui/EmptyState';
 import Modal from '../components/ui/Modal';
@@ -19,12 +18,11 @@ import {
   List,
   X,
   RotateCcw,
-  Layers,
 } from 'lucide-react';
 
 export const Home: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { selectedCity } = useCity();
+  const { selectedCity, setSelectedCity, cities } = useCity();
 
   // State
   const [ads, setAds] = useState<Ad[]>([]);
@@ -116,6 +114,7 @@ export const Home: React.FC = () => {
     setSearchQuery('');
     setActiveCategory('ALL');
     setActiveSubCategory('ALL');
+    setSelectedCity('ALL');
     setOnlyPhotos(false);
     setCurrencyFilter('ALL');
     setMinPrice('');
@@ -204,17 +203,15 @@ export const Home: React.FC = () => {
   const activeFiltersCount = [
     activeCategory !== 'ALL',
     activeSubCategory !== 'ALL',
+    selectedCity !== 'ALL',
     onlyPhotos,
     currencyFilter !== 'ALL',
     Boolean(minPrice),
-    Boolean(maxPrice)
+    Boolean(maxPrice),
   ].filter(Boolean).length;
 
   const clearAdvancedFilters = () => {
-    setOnlyPhotos(false);
-    setCurrencyFilter('ALL');
-    setMinPrice('');
-    setMaxPrice('');
+    handleResetFilters();
   };
 
   const pageTitle = activeCategoryObj
@@ -271,71 +268,8 @@ export const Home: React.FC = () => {
           )}
         </div>
       )}
-      
-      {/* Category Navigation */}
-      <div className="bg-surface dark:bg-gray-900 rounded-2xl p-4 border border-border dark:border-gray-800 shadow-card">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-          <button
-            onClick={() => handleSelectCategory('ALL')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 border ${
-              activeCategory === 'ALL'
-                ? 'bg-primary text-white border-primary'
-                : 'bg-canvas dark:bg-gray-800 border-border dark:border-gray-700 text-text-secondary dark:text-gray-300 hover:border-primary/30'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>همه</span>
-          </button>
-          {categories.map((cat) => {
-            const isSelected = activeCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => handleSelectCategory(cat.id)}
-                className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all flex items-center gap-2 border ${
-                  isSelected
-                    ? 'bg-primary text-white border-primary font-semibold'
-                    : 'bg-surface dark:bg-gray-800/80 border-border dark:border-gray-700 text-text-secondary dark:text-gray-300 hover:bg-canvas dark:hover:bg-gray-800'
-                }`}
-              >
-                <CategoryIcon name={cat.icon} className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-primary'}`} />
-                <span>{cat.name}</span>
-              </button>
-            );
-          })}
-        </div>
 
-        {activeCategoryObj && activeCategoryObj.subcategories && activeCategoryObj.subcategories.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pt-3 mt-3 border-t border-border dark:border-gray-800 no-scrollbar">
-            <span className="text-xs font-medium text-text-muted whitespace-nowrap ml-2">زیردسته:</span>
-            <button
-              onClick={() => handleSelectSubCategory('ALL')}
-              className={`px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-colors ${
-                activeSubCategory === 'ALL'
-                  ? 'bg-primary-light dark:bg-red-950/40 text-primary font-semibold'
-                  : 'text-text-secondary hover:bg-canvas dark:hover:bg-gray-800'
-              }`}
-            >
-              همه
-            </button>
-            {activeCategoryObj.subcategories.map((sub) => (
-              <button
-                key={sub.id}
-                onClick={() => handleSelectSubCategory(sub.id)}
-                className={`px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-colors ${
-                  activeSubCategory === sub.id
-                    ? 'bg-primary-light dark:bg-red-950/40 text-primary font-semibold'
-                    : 'text-text-secondary hover:bg-canvas dark:hover:bg-gray-800'
-                }`}
-              >
-                {sub.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="lg:grid lg:grid-cols-[240px_1fr] lg:gap-6 items-start">
+      <div className="lg:grid lg:grid-cols-[260px_1fr] lg:gap-6 items-start">
         {/* Desktop Filter Sidebar */}
         <aside className="hidden lg:block sticky top-24 bg-surface dark:bg-gray-900 rounded-2xl p-4 border border-border dark:border-gray-800 shadow-card space-y-4">
           <h2 className="text-sm font-semibold text-text-primary dark:text-white flex items-center gap-2">
@@ -343,6 +277,14 @@ export const Home: React.FC = () => {
             فیلتر
           </h2>
           <ListingFilters
+            categories={categories}
+            cities={cities}
+            activeCategory={activeCategory}
+            activeSubCategory={activeSubCategory}
+            selectedCity={selectedCity}
+            onCategoryChange={handleSelectCategory}
+            onSubCategoryChange={handleSelectSubCategory}
+            onCityChange={setSelectedCity}
             currencyFilter={currencyFilter}
             setCurrencyFilter={setCurrencyFilter}
             onlyPhotos={onlyPhotos}
@@ -430,6 +372,18 @@ export const Home: React.FC = () => {
                 <button type="button" onClick={() => setCurrencyFilter('ALL')} aria-label="حذف فیلتر"><X className="w-3 h-3" /></button>
               </span>
             )}
+            {selectedCity !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-canvas dark:bg-gray-800 border border-border text-text-secondary text-xs font-medium">
+                شهر: {selectedCity}
+                <button type="button" onClick={() => setSelectedCity('ALL')} aria-label="حذف فیلتر"><X className="w-3 h-3" /></button>
+              </span>
+            )}
+            {(minPrice || maxPrice) && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-canvas dark:bg-gray-800 border border-border text-text-secondary text-xs font-medium">
+                قیمت: {minPrice || '۰'} – {maxPrice || '∞'}
+                <button type="button" onClick={() => { setMinPrice(''); setMaxPrice(''); }} aria-label="حذف فیلتر"><X className="w-3 h-3" /></button>
+              </span>
+            )}
             {onlyPhotos && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-canvas dark:bg-gray-800 border border-border text-text-secondary text-xs font-medium">
                 فقط عکس‌دار
@@ -455,7 +409,7 @@ export const Home: React.FC = () => {
             onAction={handleResetFilters}
           />
         ) : (
-          <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-3'}>
+          <div className={viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3' : 'space-y-3'}>
             {filteredAds.map((ad) => (
               <AdCard key={ad.id} ad={ad} viewMode={viewMode} />
             ))}
@@ -485,6 +439,14 @@ export const Home: React.FC = () => {
         }
       >
         <ListingFilters
+          categories={categories}
+          cities={cities}
+          activeCategory={activeCategory}
+          activeSubCategory={activeSubCategory}
+          selectedCity={selectedCity}
+          onCategoryChange={handleSelectCategory}
+          onSubCategoryChange={handleSelectSubCategory}
+          onCityChange={setSelectedCity}
           currencyFilter={currencyFilter}
           setCurrencyFilter={setCurrencyFilter}
           onlyPhotos={onlyPhotos}

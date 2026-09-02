@@ -14,6 +14,7 @@ import ContactUs from './pages/ContactUs';
 import SafetyGuide from './pages/SafetyGuide';
 import Layout from './components/Layout';
 import { ToastProvider } from './components/ui/Toast';
+import PageLoader from './components/ui/PageLoader';
 
 // Theme Context
 interface ThemeContextType {
@@ -138,6 +139,17 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 export default function App() {
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setIsReady(true), 400);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (!isReady) {
+    return <PageLoader />;
+  }
+
   return (
     <ThemeProvider>
       <AuthProvider>
