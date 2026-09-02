@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>بازار آلمان - نیازمندی‌ها و خرید و فروش کالا و خدمات در سراسر آلمان</title>
+    <meta name="description" content="سامانه نیازمندی‌ها، خرید و فروش کالا و خدمات دست دوم، خودرو و املاک برای فارسی‌زبانان در سراسر ایالت‌ها و شهرهای آلمان" />
+    <meta property="og:title" content="بازار آلمان - نیازمندی‌ها و خرید و فروش کالا و خدمات" />
+    <meta property="og:description" content="سامانه نیازمندی‌ها، خرید و فروش کالا و خدمات دست دوم، خودرو و املاک برای فارسی‌زبانان در سراسر ایالت‌ها و شهرهای آلمان" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Vazirmatn', 'Vazir', 'sans-serif'],
+            },
+            colors: {
+              primary: {
+                DEFAULT: '#b41e28',
+                50: '#fef2f2',
+                100: '#fee2e2',
+                200: '#fecaca',
+                300: '#fca5a5',
+                400: '#f87171',
+                500: '#ef4444',
+                600: '#dc2626',
+                700: '#b41e28',
+                800: '#991b1b',
+                900: '#7f1d1d',
+                950: '#450a0a',
+              },
+              secondary: '#8a131b',
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      /* Hide scrollbars while preserving scrolling */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+
+      * {
+        font-feature-settings: "ss01";
+      }
+
+      /* Smooth transitions for theme switches */
+      body {
+        font-family: 'Vazirmatn', 'Vazir', sans-serif;
+      }
+    </style>
+  </head>
+  <body class="bg-[#f8f9fa] dark:bg-[#0f141c] text-gray-900 dark:text-gray-100 transition-colors duration-200 min-h-screen antialiased selection:bg-red-500 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "name": "بازار آلمان - نیازمندی‌ها و خرید و فروش کالا و خدمات",
+  "description": "سامانه نیازمندی‌ها، خرید و فروش کالا و خدمات دست دوم، خودرو و املاک برای فارسی‌زبانان در سراسر ایالت‌ها و شهرهای آلمان",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

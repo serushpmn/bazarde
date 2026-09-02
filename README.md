@@ -1,19 +1,97 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# بازار آلمان
 
-# Run and deploy your AI Studio app
+سامانه نیازمندی‌ها برای فارسی‌زبانان در آلمان — خرید و فروش کالا، خودرو، املاک و خدمات در شهرهای مختلف.
 
-This contains everything you need to run your app locally.
+---
 
-View your app in AI Studio: https://ai.studio/apps/238f0f1f-9da4-4852-afc3-629a3bac7e6c
+## ویژگی‌ها
 
-## Run Locally
+- **مرور آگهی‌ها** — فیلتر بر اساس دسته‌بندی، زیردسته و شهر
+- **ثبت آگهی** — با احراز هویت؛ آگهی‌های کاربران عادی پس از تایید ناظر منتشر می‌شوند
+- **جزئیات آگهی** — گالری تصاویر، مشخصات، قیمت، آگهی‌های مرتبط و راهنمای امنیت معامله
+- **پروفایل کاربر** — مدیریت آگهی‌ها، نشان‌ها و اعلان‌ها
+- **پنل ناظر** — تایید/رد آگهی (با ثبت دلیل رد)، مدیریت دسته‌ها، بنرها و گزارش تخلف
+- **رابط فارسی RTL** — با پشتیبانی از حالت تاریک
 
-**Prerequisites:**  Node.js
+---
 
+## فناوری‌ها
 
-1. Install dependencies:
-   `npm install`
-2. Run the app:
-   `npm run dev`
+| | |
+|---|---|
+| **Frontend** | React 19 · TypeScript · Vite |
+| **Routing** | React Router |
+| **استایل** | Tailwind CSS · Lucide Icons |
+| **داده** | localStorage (بدون بک‌اند) |
+
+---
+
+## پیش‌نیاز
+
+- [Node.js](https://nodejs.org/) نسخه 18 یا بالاتر
+- npm
+
+---
+
+## راه‌اندازی
+
+```bash
+# کلون مخزن
+git clone https://github.com/YOUR_USERNAME/bazaar.git
+cd bazaar
+
+# نصب وابستگی‌ها
+npm install
+
+# اجرای محیط توسعه
+npm run dev
+```
+
+اپلیکیشن روی `http://localhost:5173` در دسترس است.
+
+### اسکریپت‌ها
+
+| دستور | توضیح |
+|---|---|
+| `npm run dev` | سرور توسعه |
+| `npm run build` | بیلد production |
+| `npm run preview` | پیش‌نمایش بیلد |
+
+---
+
+## ساختار پروژه
+
+```
+bazaar/
+├── pages/           # صفحات (Home, AdDetails, NewAd, Profile, Admin, …)
+├── components/      # کامپوننت‌های UI
+├── services/        # لایه داده (storage, imageService)
+├── lib/             # ابزارها (formatters, placeholders)
+├── types.ts         # تایپ‌ها و داده‌های اولیه
+├── App.tsx          # روتینگ، Auth، Theme
+└── index.html       # نقطه ورود HTML
+```
+
+---
+
+## حساب‌های آزمایشی
+
+داده‌های اولیه در `localStorage` ذخیره می‌شوند. برای ورود به پنل ناظر:
+
+| نقش | شماره تماس |
+|---|---|
+| مدیر | `+49 170 0000000` |
+
+کاربران جدید با ثبت شماره موبایل ساخته می‌شوند؛ رمز عبور ندارند.
+
+---
+
+## یادداشت
+
+این پروژه در حال حاضر یک **frontend مستقل** است و تمام داده‌ها در مرورگر (`localStorage`) نگهداری می‌شوند. برای محیط production به یک API و پایگاه داده واقعی نیاز دارید.
+
+---
+
+## مجوز
+
+این پروژه هنوز مجوز مشخصی ندارد. در صورت تمایل به استفاده یا مشارکت، با maintainer هماهنگ کنید.
