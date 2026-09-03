@@ -1,97 +1,84 @@
-# بازار آلمان
+# Bazaar Germany (بازار آلمان)
 
-سامانه نیازمندی‌ها برای فارسی‌زبانان در آلمان — خرید و فروش کالا، خودرو، املاک و خدمات در شهرهای مختلف.
+Persian RTL classifieds marketplace for Iranians living in Germany. Client-only SPA; all persistence is browser `localStorage`.
 
----
+## Purpose
 
-## ویژگی‌ها
+Enable listing and discovery of goods, housing, vehicles, jobs, and services across German cities — with moderation, DSA-style reporting, appeals, and GDPR-oriented contact minimization.
 
-- **مرور آگهی‌ها** — فیلتر بر اساس دسته‌بندی، زیردسته و شهر
-- **ثبت آگهی** — با احراز هویت؛ آگهی‌های کاربران عادی پس از تایید ناظر منتشر می‌شوند
-- **جزئیات آگهی** — گالری تصاویر، مشخصات، قیمت، آگهی‌های مرتبط و راهنمای امنیت معامله
-- **پروفایل کاربر** — مدیریت آگهی‌ها، نشان‌ها و اعلان‌ها
-- **پنل ناظر** — تایید/رد آگهی (با ثبت دلیل رد)، مدیریت دسته‌ها، بنرها و گزارش تخلف
-- **رابط فارسی RTL** — با پشتیبانی از حالت تاریک
+## Main features
 
----
+- Browse / filter / search ads (city, category, price, photos)
+- Create & edit ads (phone / WhatsApp / Telegram contact toggles)
+- Moderation queue (approve / reject-with-reason / remove-with-reason)
+- DSA reports, appeals, activity logs
+- Notifications (header, home banner, profile)
+- Legal pages: rules, privacy (GDPR), banned items (admin-editable)
+- Ad expiry (default 60 days, configurable)
+- Admin panel for categories, cities, banners, support, settings
 
-## فناوری‌ها
+## Stack
 
-| | |
-|---|---|
-| **Frontend** | React 19 · TypeScript · Vite |
-| **Routing** | React Router |
-| **استایل** | Tailwind CSS · Lucide Icons |
-| **داده** | localStorage (بدون بک‌اند) |
+| Layer | Choice |
+|-------|--------|
+| UI | React 19 + TypeScript |
+| Build | Vite 6 |
+| Routing | React Router 7 (`HashRouter`) |
+| Styles | Tailwind via CDN (`index.html`) + `lib/designTokens.ts` |
+| Icons | lucide-react |
+| Data | `localStorage` via `services/storage.ts` |
+| Auth | Client-only session in `localStorage` (phone-based demo login) |
 
----
+**Not used in runtime (scaffolding only):** Supabase client / `ImageService`, `@google/genai` (declared; no app imports).
 
-## پیش‌نیاز
-
-- [Node.js](https://nodejs.org/) نسخه 18 یا بالاتر
-- npm
-
----
-
-## راه‌اندازی
+## Run
 
 ```bash
-# کلون مخزن
-git clone https://github.com/YOUR_USERNAME/bazaar.git
-cd bazaar
-
-# نصب وابستگی‌ها
 npm install
-
-# اجرای محیط توسعه
-npm run dev
+npm run dev      # Vite — see vite.config.ts (port 3000, host 0.0.0.0)
+npm run build
+npm run preview
 ```
 
-اپلیکیشن روی `http://localhost:5173` در دسترس است.
+**Tests:** none configured (`package.json` has no `test` script).
 
-### اسکریپت‌ها
+**Env:** optional `GEMINI_API_KEY` wired in `vite.config.ts` but unused by app code. Supabase placeholders in `lib/supabaseClient.ts` are unused.
 
-| دستور | توضیح |
-|---|---|
-| `npm run dev` | سرور توسعه |
-| `npm run build` | بیلد production |
-| `npm run preview` | پیش‌نمایش بیلد |
-
----
-
-## ساختار پروژه
+## Directory map
 
 ```
 bazaar/
-├── pages/           # صفحات (Home, AdDetails, NewAd, Profile, Admin, …)
-├── components/      # کامپوننت‌های UI
-├── services/        # لایه داده (storage, imageService)
-├── lib/             # ابزارها (formatters, placeholders)
-├── types.ts         # تایپ‌ها و داده‌های اولیه
-├── App.tsx          # روتینگ، Auth، Theme
-└── index.html       # نقطه ورود HTML
+├── App.tsx              # Providers + routes
+├── index.tsx            # React mount
+├── types.ts             # Domain types + seed categories/cities
+├── pages/               # Route screens
+├── components/          # UI + layout + compliance panels
+├── services/            # StorageService (source of truth), ImageService (unused)
+├── lib/                 # Formatters, design tokens, platform defaults
+├── docs/                # AI / architecture documentation
+├── AGENTS.md            # Rules for AI coding agents
+└── README.md            # This file
 ```
 
----
+## Deeper documentation
 
-## حساب‌های آزمایشی
+| Doc | Use when |
+|-----|----------|
+| [AGENTS.md](./AGENTS.md) | Starting any AI-assisted change |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System shape & data flow |
+| [docs/PROJECT_MAP.md](./docs/PROJECT_MAP.md) | Find the right module/files |
+| [docs/DATABASE.md](./docs/DATABASE.md) | Persistence model (`localStorage`) |
+| [docs/API.md](./docs/API.md) | HTTP APIs (none — client storage API) |
+| [docs/BUSINESS_RULES.md](./docs/BUSINESS_RULES.md) | Product / compliance rules |
+| [docs/DECISIONS.md](./docs/DECISIONS.md) | Architectural decisions |
+| [docs/AI_WORKFLOW.md](./docs/AI_WORKFLOW.md) | How agents should investigate |
 
-داده‌های اولیه در `localStorage` ذخیره می‌شوند. برای ورود به پنل ناظر:
+Module notes: [pages/README.md](./pages/README.md) · [components/README.md](./components/README.md) · [services/README.md](./services/README.md) · [lib/README.md](./lib/README.md)
 
-| نقش | شماره تماس |
-|---|---|
-| مدیر | `+49 170 0000000` |
+## Demo accounts
 
-کاربران جدید با ثبت شماره موبایل ساخته می‌شوند؛ رمز عبور ندارند.
+Seeded admin phone: `+49 170 0000000` (see Login quick-login). No passwords.
 
----
+## License
 
-## یادداشت
-
-این پروژه در حال حاضر یک **frontend مستقل** است و تمام داده‌ها در مرورگر (`localStorage`) نگهداری می‌شوند. برای محیط production به یک API و پایگاه داده واقعی نیاز دارید.
-
----
-
-## مجوز
-
-این پروژه هنوز مجوز مشخصی ندارد. در صورت تمایل به استفاده یا مشارکت، با maintainer هماهنگ کنید.
+UNSPECIFIED / NEEDS VERIFICATION — coordinate with maintainer before redistribution.
