@@ -170,10 +170,10 @@ export const AdDetails: React.FC = () => {
   }
 
   const verbalPrice = ad.price > 0 ? numberToPersianWords(ad.price, ad.currency) : '';
-  const whatsappLink = getWhatsAppUrl(ad.whatsappPhone || ad.contactPhone, ad.title);
+  const whatsappLink = getWhatsAppUrl(ad.contactPhone, ad.title);
   const telegramLink = ad.telegramId ? getTelegramUrl(ad.telegramId) : '';
   const showPhoneContact = ad.showPhone !== false && Boolean(ad.contactPhone);
-  const showWhatsappContact = ad.allowWhatsapp === true && Boolean(ad.whatsappPhone || ad.contactPhone);
+  const showWhatsappContact = ad.allowWhatsapp === true && Boolean(ad.contactPhone);
   const showTelegramContact = Boolean(ad.showTelegram && ad.telegramId);
   const images = hasValidAdImage(ad.images) ? ad.images.filter((image) => image && image.trim()) : [];
 
@@ -233,8 +233,7 @@ export const AdDetails: React.FC = () => {
       adPrice: ad.price,
       adImage: ad.images?.[0],
       adUserId: ad.userId,
-      reporterName: user?.name || 'کاربر سامانه',
-      reporterContact: user?.phone || undefined,
+      reporterUserId: user?.id,
       reason: reportReason,
       details: reportDetails.trim() || undefined
     });
@@ -366,13 +365,32 @@ export const AdDetails: React.FC = () => {
         )}
 
         {isOwner && ad.status === AdStatus.REJECTED && (
-          <div className="mx-4 sm:mx-0 p-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300 space-y-1">
-            <p><strong>وضعیت: رد شده.</strong> این آگهی توسط ناظر تایید نشده است. می‌توانید آن را ویرایش و مجدداً ارسال کنید.</p>
+          <div className="mx-4 sm:mx-0 p-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300 space-y-2">
+            <p><strong>وضعیت: رد شده.</strong> این آگهی توسط ناظر تایید نشده است. می‌توانید ویرایش کنید یا به تصمیم اعتراض نمایید.</p>
             {ad.rejectionReason && (
               <p className="text-gray-500 dark:text-gray-400">
                 <strong>دلیل رد:</strong> {ad.rejectionReason}
               </p>
             )}
+            <Link to="/profile?tab=appeals" className="inline-flex text-primary font-bold hover:underline">
+              ثبت اعتراض به رد آگهی ←
+            </Link>
+          </div>
+        )}
+
+        {isOwner && ad.status === AdStatus.REMOVED && (
+          <div className="mx-4 sm:mx-0 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-xs text-rose-800 dark:text-rose-200 space-y-2">
+            <p><strong>وضعیت: حذف شده توسط ناظر.</strong></p>
+            {ad.removalReason && <p><strong>دلیل حذف:</strong> {ad.removalReason}</p>}
+            <Link to="/profile?tab=appeals" className="inline-flex font-bold hover:underline">
+              ثبت اعتراض به حذف آگهی ←
+            </Link>
+          </div>
+        )}
+
+        {isOwner && ad.status === AdStatus.EXPIRED && (
+          <div className="mx-4 sm:mx-0 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-xs text-amber-900 dark:text-amber-200">
+            <strong>وضعیت: منقضی شده.</strong> برای انتشار دوباره، آگهی را ویرایش و ارسال کنید.
           </div>
         )}
 
@@ -879,7 +897,7 @@ export const AdDetails: React.FC = () => {
             ) : (
               <form onSubmit={handleSendReport} className="space-y-3">
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  لطفاً دلیل تخلف این آگهی را انتخاب فرمایید:
+                  طبق DSA می‌توانید محتوای غیرقانونی یا خلاف قوانین را با دلیل مشخص گزارش کنید.
                 </p>
                 <select
                   value={reportReason}
@@ -888,12 +906,9 @@ export const AdDetails: React.FC = () => {
                   className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs outline-none focus:border-primary font-medium"
                 >
                   <option value="">-- انتخاب دلیل تخلف --</option>
-                  <option value="اطلاعات نادرست، تقلبی یا گمراه‌کننده">اطلاعات نادرست، تقلبی یا گمراه‌کننده</option>
-                  <option value="قیمت غیرواقعی یا نامتعارف">قیمت غیرواقعی یا نامتعارف</option>
-                  <option value="کالای ممنوعه یا غیرقانونی در آلمان">کالای ممنوعه یا غیرقانونی در آلمان</option>
-                  <option value="درخواست ودیعه قبل از بازدید یا کلاهبرداری">درخواست ودیعه قبل از بازدید یا کلاهبرداری</option>
-                  <option value="شماره تماس نامعتبر یا پاسخگو نبودن">شماره تماس نامعتبر یا پاسخگو نبودن</option>
-                  <option value="آگهی تکراری یا اسپم">آگهی تکراری یا اسپم</option>
+                  {StorageService.getSettings().reportReasons.map(reason => (
+                    <option key={reason} value={reason}>{reason}</option>
+                  ))}
                 </select>
 
                 <div>

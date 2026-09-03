@@ -12,6 +12,7 @@ import AdDetails from './pages/AdDetails';
 import AdminDashboard from './pages/AdminDashboard';
 import ContactUs from './pages/ContactUs';
 import SafetyGuide from './pages/SafetyGuide';
+import { RulesPage, PrivacyPage, BannedItemsPage } from './pages/LegalPages';
 import Layout from './components/Layout';
 import { ToastProvider } from './components/ui/Toast';
 import PageLoader from './components/ui/PageLoader';
@@ -142,6 +143,7 @@ export default function App() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
+    StorageService.processExpiredAds();
     const timer = window.setTimeout(() => setIsReady(true), 400);
     return () => window.clearTimeout(timer);
   }, []);
@@ -164,6 +166,9 @@ export default function App() {
                 <Route path="/contact" element={<ContactUs />} />
                 <Route path="/safety" element={<SafetyGuide />} />
                 <Route path="/scam-guide" element={<SafetyGuide />} />
+                <Route path="/rules" element={<RulesPage />} />
+                <Route path="/privacy" element={<PrivacyPage />} />
+                <Route path="/banned" element={<BannedItemsPage />} />
                 
                 {/* Support both /new and /new-ad routes */}
                 <Route path="/new-ad" element={

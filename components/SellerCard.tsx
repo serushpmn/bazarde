@@ -37,7 +37,7 @@ export const SellerCard: React.FC<SellerCardProps> = ({ seller, onContact }) => 
           <p className={caption}>{roleLabel}</p>
           <div className={`${caption} flex items-center gap-1 mt-1`}>
             <MapPin className="w-3.5 h-3.5 shrink-0" />
-            <span>{seller.city}</span>
+            <span>{seller.city || 'آلمان'}</span>
           </div>
         </div>
       </div>

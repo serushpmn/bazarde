@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { StorageService } from '../services/storage';
-import { Ad, AdStatus, Category, Banner } from '../types';
-import { useCity } from '../App';
+import { Ad, AdStatus, Category, Banner, AppNotification } from '../types';
+import { useAuth, useCity } from '../App';
 import AdCard from '../components/AdCard';
 import { ListingFilters } from '../components/ListingFilters';
 import EmptyState from '../components/ui/EmptyState';
 import Modal from '../components/ui/Modal';
+import { HomeNotificationBanner } from '../components/NotificationList';
 import { hasValidAdImage } from '../lib/adImagePlaceholders';
 import { toPersianDigits } from '../lib/formatters';
 import { container } from '../lib/designTokens';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Search,
   SlidersHorizontal,
@@ -22,6 +23,8 @@ import {
 
 export const Home: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { selectedCity, setSelectedCity, cities } = useCity();
 
   // State
@@ -30,6 +33,7 @@ export const Home: React.FC = () => {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [homeNotifs, setHomeNotifs] = useState<AppNotification[]>([]);
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
@@ -46,10 +50,18 @@ export const Home: React.FC = () => {
 
   // Load initial data
   useEffect(() => {
-    setAds(StorageService.getAds());
+    setAds(StorageService.getPublicAds());
     setCategories(StorageService.getCategories());
     setBanners(StorageService.getBanners().filter(b => b.position === 'HOME_TOP'));
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      setHomeNotifs(StorageService.getNotifications(user.id, user.role));
+    } else {
+      setHomeNotifs([]);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (banners.length <= 1) return undefined;
@@ -220,6 +232,20 @@ export const Home: React.FC = () => {
 
   return (
     <div className={`${container} py-5 sm:py-6 space-y-5`}>
+      {user && (
+        <HomeNotificationBanner
+          items={homeNotifs}
+          onOpen={(n) => {
+            StorageService.markNotificationRead(n.id);
+            setHomeNotifs(StorageService.getNotifications(user.id, user.role));
+            if (n.link) navigate(n.link);
+          }}
+          onDismissAll={() => {
+            StorageService.markAllNotificationsRead(user.id, user.role);
+            setHomeNotifs(StorageService.getNotifications(user.id, user.role));
+          }}
+        />
+      )}
 
       {banners.length > 0 && (
         <div className="relative rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-xs">

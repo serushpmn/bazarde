@@ -239,9 +239,12 @@ export const NewAd: React.FC = () => {
       images,
       status: adStatus,
       createdAt: existingAd?.createdAt || Date.now(),
+      expiresAt:
+        adStatus === AdStatus.APPROVED
+          ? StorageService.computeExpiresAt(existingAd?.createdAt || Date.now())
+          : existingAd?.expiresAt,
       contactPhone: userPhone,
       showPhone,
-      whatsappPhone: allowWhatsapp ? userPhone : undefined,
       allowWhatsapp,
       telegramId: showTelegram && normalizedTelegram ? normalizedTelegram : undefined,
       showTelegram: showTelegram && Boolean(normalizedTelegram),
@@ -254,6 +257,15 @@ export const NewAd: React.FC = () => {
     };
 
     StorageService.saveAd(newAd);
+    StorageService.addActivityLog({
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: isStaff ? (user.role === UserRole.EDITOR ? 'EDITOR' : 'ADMIN') : 'USER',
+      action: isEditMode ? 'AD_UPDATED' : 'AD_CREATED',
+      targetType: 'AD',
+      targetId: newAd.id,
+      details: `${newAd.title} · status=${adStatus}`,
+    });
 
     if (!isEditMode) {
       StorageService.addNotification({
@@ -263,6 +275,7 @@ export const NewAd: React.FC = () => {
           ? `آگهی «${newAd.title}» منتشر گردید.`
           : `آگهی «${newAd.title}» در صف بررسی قرار گرفت و پس از تایید ناظر در بازار نمایش داده می‌شود.`,
         type: isStaff ? 'SUCCESS' : 'INFO',
+        category: 'moderation',
         link: '/profile?tab=my_ads'
       });
 
@@ -272,6 +285,7 @@ export const NewAd: React.FC = () => {
           title: 'آگهی جدید در انتظار بررسی',
           message: `آگهی «${newAd.title}» توسط ${user.name} ثبت شد و نیاز به تایید دارد.`,
           type: 'WARNING',
+          category: 'moderation',
           link: '/admin?tab=ads'
         });
       }
@@ -283,6 +297,7 @@ export const NewAd: React.FC = () => {
           ? `تغییرات آگهی «${newAd.title}» ثبت شد و به‌دلیل تغییر عنوان، توضیحات یا تصاویر در صف بررسی ناظر قرار گرفت.`
           : `تغییرات آگهی «${newAd.title}» ذخیره شد.`,
         type: 'INFO',
+        category: 'moderation',
         link: '/profile?tab=my_ads'
       });
 
@@ -292,6 +307,7 @@ export const NewAd: React.FC = () => {
           title: 'آگهی ویرایش‌شده نیاز به بررسی',
           message: `آگهی «${newAd.title}» توسط ${user.name} ویرایش شد و نیاز به تایید مجدد دارد.`,
           type: 'WARNING',
+          category: 'moderation',
           link: '/admin?tab=ads'
         });
       }
@@ -343,7 +359,10 @@ export const NewAd: React.FC = () => {
                 : 'تغییر عنوان، توضیحات یا تصاویر نیاز به بررسی مجدد دارد. سایر تغییرات (قیمت، شهر، تماس و...) بلافاصله اعمال می‌شوند.'
               : isStaff
                 ? 'مشخصات آگهی را تکمیل کنید تا منتشر شود.'
-                : 'پس از ثبت، آگهی شما در صف بررسی ناظر قرار می‌گیرد و پس از تایید منتشر می‌شود.'}
+                : 'پس از ثبت، آگهی شما در صف بررسی ناظر قرار می‌گیرد و پس از تایید منتشر می‌شود.'}{' '}
+              <Link to="/banned" className="text-primary hover:underline">کالاهای ممنوعه</Link>
+              {' · '}
+              <Link to="/rules" className="text-primary hover:underline">قوانین</Link>
           </p>
         </div>
 

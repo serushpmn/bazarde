@@ -7,7 +7,9 @@ export enum UserRole {
 export enum AdStatus {
   PENDING = 'PENDING',
   APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED'
+  REJECTED = 'REJECTED',
+  EXPIRED = 'EXPIRED',
+  REMOVED = 'REMOVED'
 }
 
 export type ItemCondition = 'NEW' | 'LIKE_NEW' | 'USED' | 'FOR_PARTS';
@@ -51,13 +53,17 @@ export interface Ad {
   images: string[];
   status: AdStatus;
   createdAt: number;
+  expiresAt?: number;
   contactPhone: string;
   showPhone?: boolean;
-  whatsappPhone?: string;
   allowWhatsapp?: boolean;
   telegramId?: string;
   showTelegram?: boolean;
   rejectionReason?: string;
+  removalReason?: string;
+  removedAt?: number;
+  removedBy?: 'USER' | 'ADMIN' | 'SYSTEM';
+  soldFeedback?: 'SOLD' | 'NOT_SOLD' | 'PREFER_NOT_SAY';
   viewsCount?: number;
   isVerifiedSeller?: boolean;
   attributes?: Record<string, string>;
@@ -66,24 +72,25 @@ export interface Ad {
 export interface User {
   id: string;
   name: string;
+  /** Primary contact — only essential personal data stored (GDPR minimization) */
   phone: string;
-  city: string;
+  city?: string;
   role: UserRole;
   avatar?: string;
   createdAt?: number;
   savedAdIds?: string[];
-  password?: string;
 }
 
 export interface AppNotification {
   id: string;
-  userId: string; // User ID or 'ADMIN'
+  userId: string; // User ID, 'ADMIN', or 'ALL'
   title?: string;
   message: string;
   type: 'INFO' | 'SUCCESS' | 'ERROR' | 'WARNING';
   isRead: boolean;
   createdAt: number;
   link?: string;
+  category?: 'moderation' | 'report' | 'appeal' | 'expiry' | 'support' | 'system';
 }
 
 export interface ViolationReport {
@@ -94,12 +101,51 @@ export interface ViolationReport {
   adPrice: number;
   adImage?: string;
   adUserId: string;
-  reporterName?: string;
-  reporterContact?: string;
+  reporterUserId?: string;
   reason: string;
   details?: string;
   createdAt: number;
   status: 'PENDING' | 'RESOLVED' | 'DISMISSED';
+}
+
+export type AppealType = 'REJECTION' | 'REMOVAL';
+export type AppealStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
+
+export interface Appeal {
+  id: string;
+  adId: string;
+  adTitle: string;
+  userId: string;
+  type: AppealType;
+  originalReason: string;
+  message: string;
+  status: AppealStatus;
+  adminReply?: string;
+  createdAt: number;
+  resolvedAt?: number;
+}
+
+export type ActivityActor = 'USER' | 'ADMIN' | 'EDITOR' | 'SYSTEM';
+
+export interface ActivityLog {
+  id: string;
+  actorId?: string;
+  actorName?: string;
+  actorRole?: ActivityActor;
+  action: string;
+  targetType: 'AD' | 'USER' | 'REPORT' | 'APPEAL' | 'SETTINGS' | 'SYSTEM';
+  targetId?: string;
+  details?: string;
+  createdAt: number;
+}
+
+export interface PlatformSettings {
+  adExpiryDays: number;
+  bannedItems: string[];
+  publishingRules: string;
+  privacyPolicy: string;
+  reportReasons: string[];
+  rejectReasonTemplates: string[];
 }
 
 export interface SupportMessage {

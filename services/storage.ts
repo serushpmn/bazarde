@@ -10,8 +10,14 @@ import {
   Banner,
   Category,
   ChatMessage,
-  ViolationReport
+  ViolationReport,
+  PlatformSettings,
+  Appeal,
+  AppealStatus,
+  ActivityLog,
+  ActivityActor,
 } from '../types';
+import { DEFAULT_PLATFORM_SETTINGS, MS_PER_DAY } from '../lib/platformDefaults';
 
 const STORAGE_KEYS = {
   USERS: 'bazaar_de_users_v3',
@@ -25,7 +31,10 @@ const STORAGE_KEYS = {
   BOOKMARKS: 'bazaar_de_saved_ads_v3',
   RECENT_VIEWS: 'bazaar_de_recent_views_v3',
   CHATS: 'bazaar_de_chats_v3',
-  VIOLATION_REPORTS: 'bazaar_de_violation_reports_v3'
+  VIOLATION_REPORTS: 'bazaar_de_violation_reports_v3',
+  SETTINGS: 'bazaar_de_settings_v3',
+  APPEALS: 'bazaar_de_appeals_v3',
+  ACTIVITY_LOGS: 'bazaar_de_activity_logs_v3',
 };
 
 // Initial Realistic Seed Ads across Germany
@@ -357,8 +366,7 @@ const INITIAL_VIOLATION_REPORTS: ViolationReport[] = [
     adPrice: 1450,
     adImage: 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=1000&q=80',
     adUserId: 'user-stuttgart-1',
-    reporterName: 'علی رضایی',
-    reporterContact: '+49 176 88776655',
+    reporterUserId: 'user-demo-reporter',
     reason: 'اطلاعات نادرست و مشکوک به قیمت غیرواقعی',
     details: 'فروشنده در چت قیمت متفاوتی نسبت به متن آگهی اعلام کرده است.',
     createdAt: Date.now() - 1000 * 60 * 45,
@@ -395,6 +403,15 @@ const seedData = () => {
     };
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([adminUser]));
   }
+  if (!localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_PLATFORM_SETTINGS));
+  }
+  if (!localStorage.getItem(STORAGE_KEYS.APPEALS)) {
+    localStorage.setItem(STORAGE_KEYS.APPEALS, JSON.stringify([]));
+  }
+  if (!localStorage.getItem(STORAGE_KEYS.ACTIVITY_LOGS)) {
+    localStorage.setItem(STORAGE_KEYS.ACTIVITY_LOGS, JSON.stringify([]));
+  }
 };
 
 // Initialize immediately
@@ -420,6 +437,51 @@ export const StorageService = {
     }
   },
 
+  getPublicAds: (): Ad[] => {
+    StorageService.processExpiredAds();
+    return StorageService.getAds().filter(a => a.status === AdStatus.APPROVED);
+  },
+
+  computeExpiresAt: (createdAt: number, expiryDays?: number): number => {
+    const days = expiryDays ?? StorageService.getSettings().adExpiryDays;
+    return createdAt + days * MS_PER_DAY;
+  },
+
+  processExpiredAds: (): number => {
+    const settings = StorageService.getSettings();
+    const ads = StorageService.getAds();
+    const now = Date.now();
+    let changed = 0;
+    ads.forEach(ad => {
+      if (ad.status !== AdStatus.APPROVED) return;
+      const expiresAt = ad.expiresAt || StorageService.computeExpiresAt(ad.createdAt, settings.adExpiryDays);
+      if (!ad.expiresAt) ad.expiresAt = expiresAt;
+      if (now >= expiresAt) {
+        ad.status = AdStatus.EXPIRED;
+        changed += 1;
+        StorageService.addNotification({
+          userId: ad.userId,
+          title: 'آگهی منقضی شد',
+          message: `آگهی «${ad.title}» پس از ${settings.adExpiryDays} روز منقضی شد. می‌توانید آن را ویرایش و مجدداً ارسال کنید.`,
+          type: 'WARNING',
+          category: 'expiry',
+          link: '/profile?tab=my_ads',
+        });
+        StorageService.addActivityLog({
+          actorRole: 'SYSTEM',
+          action: 'AD_EXPIRED',
+          targetType: 'AD',
+          targetId: ad.id,
+          details: `آگهی «${ad.title}» منقضی شد`,
+        });
+      }
+    });
+    if (changed > 0) {
+      localStorage.setItem(STORAGE_KEYS.ADS, JSON.stringify(ads));
+    }
+    return changed;
+  },
+
   getAdById: (id: string): Ad | undefined => {
     const ads = StorageService.getAds();
     return ads.find(a => a.id === id);
@@ -427,13 +489,76 @@ export const StorageService = {
 
   saveAd: (ad: Ad) => {
     const ads = StorageService.getAds();
-    const index = ads.findIndex(a => a.id === ad.id);
+    const settings = StorageService.getSettings();
+    const toSave: Ad = {
+      ...ad,
+      expiresAt: ad.expiresAt || StorageService.computeExpiresAt(ad.createdAt, settings.adExpiryDays),
+    };
+    const index = ads.findIndex(a => a.id === toSave.id);
     if (index >= 0) {
-      ads[index] = ad;
+      ads[index] = toSave;
     } else {
-      ads.unshift(ad);
+      ads.unshift(toSave);
     }
     localStorage.setItem(STORAGE_KEYS.ADS, JSON.stringify(ads));
+  },
+
+  /** Soft-remove by admin/system with mandatory reason (DSA) */
+  removeAdWithReason: (
+    id: string,
+    reason: string,
+    actor: { id?: string; name?: string; role: ActivityActor }
+  ) => {
+    const ads = StorageService.getAds();
+    const idx = ads.findIndex(a => a.id === id);
+    if (idx < 0) return null;
+    const ad = ads[idx];
+    ad.status = AdStatus.REMOVED;
+    ad.removalReason = reason.trim();
+    ad.removedAt = Date.now();
+    ad.removedBy = actor.role === 'SYSTEM' ? 'SYSTEM' : actor.role === 'USER' ? 'USER' : 'ADMIN';
+    localStorage.setItem(STORAGE_KEYS.ADS, JSON.stringify(ads));
+
+    StorageService.addNotification({
+      userId: ad.userId,
+      title: 'آگهی شما حذف شد',
+      message: `آگهی «${ad.title}» حذف شد. دلیل: ${reason.trim()}. می‌توانید اعتراض ثبت کنید.`,
+      type: 'ERROR',
+      category: 'moderation',
+      link: '/profile?tab=my_ads',
+    });
+    StorageService.addActivityLog({
+      actorId: actor.id,
+      actorName: actor.name,
+      actorRole: actor.role,
+      action: 'AD_REMOVED',
+      targetType: 'AD',
+      targetId: ad.id,
+      details: reason.trim(),
+    });
+    return ad;
+  },
+
+  /** User self-delete with optional sold feedback */
+  deleteAdByUser: (
+    id: string,
+    userId: string,
+    soldFeedback?: Ad['soldFeedback']
+  ) => {
+    const ads = StorageService.getAds();
+    const ad = ads.find(a => a.id === id && a.userId === userId);
+    if (!ad) return false;
+    const remaining = ads.filter(a => a.id !== id);
+    localStorage.setItem(STORAGE_KEYS.ADS, JSON.stringify(remaining));
+    StorageService.addActivityLog({
+      actorId: userId,
+      actorRole: 'USER',
+      action: 'AD_USER_DELETED',
+      targetType: 'AD',
+      targetId: id,
+      details: `فروش: ${soldFeedback || 'نامشخص'} — «${ad.title}»`,
+    });
+    return true;
   },
 
   deleteAd: (id: string) => {
@@ -509,14 +634,42 @@ export const StorageService = {
   },
 
   saveUser: (user: User) => {
+    const sanitized: User = {
+      id: user.id,
+      name: user.name.trim(),
+      phone: user.phone.trim(),
+      city: user.city?.trim() || undefined,
+      role: user.role,
+      avatar: user.avatar,
+      createdAt: user.createdAt,
+      savedAdIds: user.savedAdIds,
+    };
     const users = StorageService.getUsers();
-    const idx = users.findIndex(u => u.id === user.id);
+    const idx = users.findIndex(u => u.id === sanitized.id);
     if (idx >= 0) {
-      users[idx] = user;
+      users[idx] = sanitized;
     } else {
-      users.push(user);
+      users.push(sanitized);
     }
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+  },
+
+  deleteUserAccount: (userId: string) => {
+    const users = StorageService.getUsers().filter(u => u.id !== userId);
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    const ads = StorageService.getAds().filter(a => a.userId !== userId);
+    localStorage.setItem(STORAGE_KEYS.ADS, JSON.stringify(ads));
+    const notifs = (JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]') as AppNotification[])
+      .filter(n => n.userId !== userId);
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifs));
+    StorageService.addActivityLog({
+      actorId: userId,
+      actorRole: 'USER',
+      action: 'ACCOUNT_DELETED',
+      targetType: 'USER',
+      targetId: userId,
+      details: 'حذف حساب کاربری توسط خود کاربر (GDPR)',
+    });
   },
 
   getCurrentUser: (): User | null => {
@@ -591,10 +744,16 @@ export const StorageService = {
   },
 
   // Notifications
-  getNotifications: (userId?: string): AppNotification[] => {
+  getNotifications: (userId?: string, role?: UserRole): AppNotification[] => {
     try {
       const all = JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]') as AppNotification[];
-      return all.filter(n => !userId || n.userId === userId || n.userId === 'ALL' || n.userId === 'ADMIN');
+      if (!userId) return all;
+      const isStaff = role === UserRole.ADMIN || role === UserRole.EDITOR;
+      return all.filter(n => {
+        if (n.userId === userId || n.userId === 'ALL') return true;
+        if (isStaff && n.userId === 'ADMIN') return true;
+        return false;
+      });
     } catch {
       return [];
     }
@@ -609,7 +768,7 @@ export const StorageService = {
       isRead: false
     };
     all.unshift(newNotif);
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(all));
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(all.slice(0, 500)));
   },
 
   markNotificationRead: (id: string) => {
@@ -624,14 +783,20 @@ export const StorageService = {
   markAllNotificationsRead: (userId: string, role: UserRole) => {
     const all = JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]') as AppNotification[];
     all.forEach(n => {
-      if (n.userId === userId || ((role === UserRole.ADMIN || role === UserRole.EDITOR) && n.userId === 'ADMIN')) {
+      if (n.userId === userId || n.userId === 'ALL' || ((role === UserRole.ADMIN || role === UserRole.EDITOR) && n.userId === 'ADMIN')) {
         n.isRead = true;
       }
     });
     localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(all));
   },
 
-  // Violation Reports (گزارش‌های تخلف)
+  deleteNotification: (id: string) => {
+    const all = (JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]') as AppNotification[])
+      .filter(n => n.id !== id);
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(all));
+  },
+
+  // Violation Reports (گزارش‌های تخلف / DSA)
   getViolationReports: (): ViolationReport[] => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.VIOLATION_REPORTS) || '[]');
@@ -651,13 +816,33 @@ export const StorageService = {
     reports.unshift(newReport);
     localStorage.setItem(STORAGE_KEYS.VIOLATION_REPORTS, JSON.stringify(reports));
 
-    // Also send an admin notification with link directly to report in admin panel
     StorageService.addNotification({
       userId: 'ADMIN',
-      title: 'گزارش تخلف جدید',
+      title: 'گزارش تخلف جدید (DSA)',
       message: `گزارش جدید برای آگهی «${report.adTitle}» ثبت شد. علت: ${report.reason}`,
       type: 'WARNING',
+      category: 'report',
       link: `/admin?tab=reports&reportId=${newReport.id}`
+    });
+
+    if (report.reporterUserId) {
+      StorageService.addNotification({
+        userId: report.reporterUserId,
+        title: 'گزارش شما دریافت شد',
+        message: `گزارش تخلف برای «${report.adTitle}» ثبت شد و توسط ناظران بررسی می‌شود.`,
+        type: 'SUCCESS',
+        category: 'report',
+        link: '/profile?tab=notifications',
+      });
+    }
+
+    StorageService.addActivityLog({
+      actorId: report.reporterUserId,
+      actorRole: 'USER',
+      action: 'REPORT_CREATED',
+      targetType: 'REPORT',
+      targetId: newReport.id,
+      details: report.reason,
     });
 
     return newReport;
@@ -669,12 +854,173 @@ export const StorageService = {
     if (idx >= 0) {
       reports[idx].status = status;
       localStorage.setItem(STORAGE_KEYS.VIOLATION_REPORTS, JSON.stringify(reports));
+      const rep = reports[idx];
+      if (rep.reporterUserId) {
+        StorageService.addNotification({
+          userId: rep.reporterUserId,
+          title: status === 'RESOLVED' ? 'گزارش شما رسیدگی شد' : 'نتیجه بررسی گزارش',
+          message:
+            status === 'RESOLVED'
+              ? `گزارش مربوط به «${rep.adTitle}» رسیدگی شد.`
+              : `گزارش مربوط به «${rep.adTitle}» رد شد (بدون تخلف احرازشده).`,
+          type: status === 'RESOLVED' ? 'SUCCESS' : 'INFO',
+          category: 'report',
+          link: '/profile?tab=notifications',
+        });
+      }
     }
   },
 
   deleteViolationReport: (reportId: string) => {
     const reports = StorageService.getViolationReports().filter(r => r.id !== reportId);
     localStorage.setItem(STORAGE_KEYS.VIOLATION_REPORTS, JSON.stringify(reports));
+  },
+
+  // Appeals
+  getAppeals: (): Appeal[] => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.APPEALS) || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  getAppealsByUser: (userId: string): Appeal[] => {
+    return StorageService.getAppeals().filter(a => a.userId === userId);
+  },
+
+  saveAppeal: (appeal: Omit<Appeal, 'id' | 'createdAt' | 'status'>) => {
+    const appeals = StorageService.getAppeals();
+    const newAppeal: Appeal = {
+      ...appeal,
+      id: `apl-${Date.now()}`,
+      createdAt: Date.now(),
+      status: 'PENDING',
+    };
+    appeals.unshift(newAppeal);
+    localStorage.setItem(STORAGE_KEYS.APPEALS, JSON.stringify(appeals));
+
+    StorageService.addNotification({
+      userId: 'ADMIN',
+      title: 'اعتراض جدید به تصمیم moderation',
+      message: `اعتراض روی آگهی «${appeal.adTitle}» ثبت شد.`,
+      type: 'WARNING',
+      category: 'appeal',
+      link: '/admin?tab=appeals',
+    });
+    StorageService.addNotification({
+      userId: appeal.userId,
+      title: 'اعتراض شما ثبت شد',
+      message: `اعتراض شما برای «${appeal.adTitle}» در صف بررسی قرار گرفت.`,
+      type: 'INFO',
+      category: 'appeal',
+      link: '/profile?tab=appeals',
+    });
+    StorageService.addActivityLog({
+      actorId: appeal.userId,
+      actorRole: 'USER',
+      action: 'APPEAL_CREATED',
+      targetType: 'APPEAL',
+      targetId: newAppeal.id,
+      details: appeal.message,
+    });
+    return newAppeal;
+  },
+
+  resolveAppeal: (
+    appealId: string,
+    status: Exclude<AppealStatus, 'PENDING'>,
+    adminReply: string,
+    actor: { id?: string; name?: string; role: ActivityActor }
+  ) => {
+    const appeals = StorageService.getAppeals();
+    const idx = appeals.findIndex(a => a.id === appealId);
+    if (idx < 0) return;
+    const appeal = appeals[idx];
+    appeal.status = status;
+    appeal.adminReply = adminReply.trim();
+    appeal.resolvedAt = Date.now();
+    localStorage.setItem(STORAGE_KEYS.APPEALS, JSON.stringify(appeals));
+
+    if (status === 'ACCEPTED') {
+      const ad = StorageService.getAdById(appeal.adId);
+      if (ad) {
+        ad.status = AdStatus.PENDING;
+        ad.rejectionReason = undefined;
+        ad.removalReason = undefined;
+        ad.removedAt = undefined;
+        ad.removedBy = undefined;
+        StorageService.saveAd(ad);
+      }
+    }
+
+    StorageService.addNotification({
+      userId: appeal.userId,
+      title: status === 'ACCEPTED' ? 'اعتراض پذیرفته شد' : 'اعتراض رد شد',
+      message:
+        status === 'ACCEPTED'
+          ? `اعتراض شما برای «${appeal.adTitle}» پذیرفته شد و آگهی دوباره در صف بررسی است.${adminReply.trim() ? ` توضیح: ${adminReply.trim()}` : ''}`
+          : `اعتراض شما برای «${appeal.adTitle}» رد شد.${adminReply.trim() ? ` دلیل: ${adminReply.trim()}` : ''}`,
+      type: status === 'ACCEPTED' ? 'SUCCESS' : 'ERROR',
+      category: 'appeal',
+      link: '/profile?tab=appeals',
+    });
+    StorageService.addActivityLog({
+      actorId: actor.id,
+      actorName: actor.name,
+      actorRole: actor.role,
+      action: status === 'ACCEPTED' ? 'APPEAL_ACCEPTED' : 'APPEAL_REJECTED',
+      targetType: 'APPEAL',
+      targetId: appealId,
+      details: adminReply.trim(),
+    });
+  },
+
+  // Platform settings
+  getSettings: (): PlatformSettings => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+      if (!raw) return { ...DEFAULT_PLATFORM_SETTINGS };
+      return { ...DEFAULT_PLATFORM_SETTINGS, ...JSON.parse(raw) };
+    } catch {
+      return { ...DEFAULT_PLATFORM_SETTINGS };
+    }
+  },
+
+  saveSettings: (
+    settings: PlatformSettings,
+    actor?: { id?: string; name?: string; role: ActivityActor }
+  ) => {
+    const merged = { ...DEFAULT_PLATFORM_SETTINGS, ...settings };
+    if (!merged.adExpiryDays || merged.adExpiryDays < 1) merged.adExpiryDays = 60;
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(merged));
+    StorageService.addActivityLog({
+      actorId: actor?.id,
+      actorName: actor?.name,
+      actorRole: actor?.role || 'ADMIN',
+      action: 'SETTINGS_UPDATED',
+      targetType: 'SETTINGS',
+      details: `انقضا: ${merged.adExpiryDays} روز`,
+    });
+  },
+
+  // Activity logs
+  getActivityLogs: (): ActivityLog[] => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.ACTIVITY_LOGS) || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  addActivityLog: (log: Omit<ActivityLog, 'id' | 'createdAt'>) => {
+    const all = StorageService.getActivityLogs();
+    all.unshift({
+      ...log,
+      id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      createdAt: Date.now(),
+    });
+    localStorage.setItem(STORAGE_KEYS.ACTIVITY_LOGS, JSON.stringify(all.slice(0, 1000)));
   },
 
   // Support Messages
@@ -696,6 +1042,14 @@ export const StorageService = {
     };
     msgs.unshift(newMsg);
     localStorage.setItem(STORAGE_KEYS.SUPPORT_MESSAGES, JSON.stringify(msgs));
+    StorageService.addNotification({
+      userId: 'ADMIN',
+      title: 'پیام پشتیبانی جدید',
+      message: `موضوع: ${msg.subject}`,
+      type: 'INFO',
+      category: 'support',
+      link: '/admin?tab=support',
+    });
   },
 
   replyToMessage: (id: string, reply: string) => {
@@ -705,6 +1059,18 @@ export const StorageService = {
       msgs[idx].reply = reply;
       msgs[idx].isReplied = true;
       localStorage.setItem(STORAGE_KEYS.SUPPORT_MESSAGES, JSON.stringify(msgs));
+      const contact = msgs[idx].contact.trim();
+      const matched = StorageService.getUsers().find(u => u.phone.trim() === contact);
+      if (matched) {
+        StorageService.addNotification({
+          userId: matched.id,
+          title: 'پاسخ پشتیبانی',
+          message: `به پیام «${msgs[idx].subject}» پاسخ داده شد.`,
+          type: 'SUCCESS',
+          category: 'support',
+          link: '/contact',
+        });
+      }
     }
   },
 
@@ -762,6 +1128,9 @@ export const StorageService = {
     localStorage.removeItem(STORAGE_KEYS.CATEGORIES);
     localStorage.removeItem(STORAGE_KEYS.BANNERS);
     localStorage.removeItem(STORAGE_KEYS.VIOLATION_REPORTS);
+    localStorage.removeItem(STORAGE_KEYS.SETTINGS);
+    localStorage.removeItem(STORAGE_KEYS.APPEALS);
+    localStorage.removeItem(STORAGE_KEYS.ACTIVITY_LOGS);
     seedData();
   }
 };

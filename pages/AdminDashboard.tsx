@@ -10,12 +10,15 @@ import {
   UserRole,
   SupportMessage,
   Banner,
-  ViolationReport
+  ViolationReport,
+  Appeal,
+  ActivityLog,
 } from '../types';
 import { CategoryIcon } from '../components/CategoryIcon';
 import AdImage from '../components/AdImage';
 import { hasValidAdImage } from '../lib/adImagePlaceholders';
 import { formatPrice, getTimeAgo, toPersianDigits } from '../lib/formatters';
+import { AdminSettingsPanel, AdminAppealsPanel, AdminLogsPanel } from '../components/AdminCompliancePanels';
 import {
   SlidersHorizontal,
   CheckCircle2,
@@ -43,8 +46,14 @@ import {
   Phone,
   AlertTriangle,
   Flag,
-  FileText
+  FileText,
+  Settings2,
+  Scale,
+  ScrollText,
 } from 'lucide-react';
+
+type AdminTab = 'ads' | 'reports' | 'appeals' | 'settings' | 'logs' | 'categories' | 'cities' | 'support' | 'banners' | 'users';
+const ADMIN_TABS: AdminTab[] = ['ads', 'reports', 'appeals', 'settings', 'logs', 'categories', 'cities', 'support', 'banners', 'users'];
 
 export const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -52,11 +61,11 @@ export const AdminDashboard: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Active Tab from URL params or default to 'ads'
-  const initialTab = (searchParams.get('tab') as any) || 'ads';
+  const initialTab = (searchParams.get('tab') as AdminTab) || 'ads';
   const highlightedReportId = searchParams.get('reportId');
 
-  const [activeTab, setActiveTab] = useState<'ads' | 'reports' | 'categories' | 'cities' | 'support' | 'banners' | 'users'>(
-    ['ads', 'reports', 'categories', 'cities', 'support', 'banners', 'users'].includes(initialTab) ? initialTab : 'ads'
+  const [activeTab, setActiveTab] = useState<AdminTab>(
+    ADMIN_TABS.includes(initialTab) ? initialTab : 'ads'
   );
 
   // Data State
@@ -67,6 +76,8 @@ export const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
+  const [appeals, setAppeals] = useState<Appeal[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
 
   // Ads Filter
   const [adStatusFilter, setAdStatusFilter] = useState<'ALL' | AdStatus>('ALL');
@@ -77,6 +88,8 @@ export const AdminDashboard: React.FC = () => {
   const [previewAd, setPreviewAd] = useState<Ad | null>(null);
   const [rejectModalAd, setRejectModalAd] = useState<Ad | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [removeModalAd, setRemoveModalAd] = useState<Ad | null>(null);
+  const [removeReason, setRemoveReason] = useState('');
 
   // Handle Escape key for Preview Modal
   useEffect(() => {
@@ -111,6 +124,7 @@ export const AdminDashboard: React.FC = () => {
   const [newBannerLink, setNewBannerLink] = useState('');
 
   const loadAll = () => {
+    StorageService.processExpiredAds();
     setAds(StorageService.getAds());
     setReports(StorageService.getViolationReports());
     setCategories(StorageService.getCategories());
@@ -118,6 +132,8 @@ export const AdminDashboard: React.FC = () => {
     setUsers(StorageService.getUsers());
     setSupportMessages(StorageService.getSupportMessages());
     setBanners(StorageService.getBanners());
+    setAppeals(StorageService.getAppeals());
+    setActivityLogs(StorageService.getActivityLogs());
   };
 
   useEffect(() => {
@@ -137,26 +153,39 @@ export const AdminDashboard: React.FC = () => {
   // Ads Moderation Actions
   const handleUpdateAdStatus = (adId: string, status: AdStatus, rejectionReason?: string) => {
     const ad = StorageService.getAdById(adId);
-    if (ad) {
-      ad.status = status;
-      if (status === AdStatus.REJECTED) {
-        ad.rejectionReason = rejectionReason?.trim() || undefined;
-      } else if (status === AdStatus.APPROVED) {
-        ad.rejectionReason = undefined;
-      }
-      StorageService.saveAd(ad);
-      StorageService.addNotification({
-        userId: ad.userId,
-        title: status === AdStatus.APPROVED ? 'آگهی شما تایید شد' : 'آگهی شما رد شد',
-        message:
-          status === AdStatus.APPROVED
-            ? `آگهی «${ad.title}» توسط ناظرین تایید و در بازار آلمان منتشر شد.`
-            : `آگهی «${ad.title}» تایید نشد.${rejectionReason?.trim() ? ` دلیل: ${rejectionReason.trim()}` : ''}`,
-        type: status === AdStatus.APPROVED ? 'SUCCESS' : 'ERROR',
-        link: status === AdStatus.APPROVED ? `/ad/${ad.id}` : '/profile?tab=my_ads'
-      });
-      loadAll();
+    if (!ad || !user) return;
+    if (status === AdStatus.REJECTED && !rejectionReason?.trim()) return;
+
+    ad.status = status;
+    if (status === AdStatus.REJECTED) {
+      ad.rejectionReason = rejectionReason?.trim() || undefined;
+    } else if (status === AdStatus.APPROVED) {
+      ad.rejectionReason = undefined;
+      ad.removalReason = undefined;
+      ad.expiresAt = StorageService.computeExpiresAt(ad.createdAt);
     }
+    StorageService.saveAd(ad);
+    StorageService.addNotification({
+      userId: ad.userId,
+      title: status === AdStatus.APPROVED ? 'آگهی شما تایید شد' : 'آگهی شما رد شد',
+      message:
+        status === AdStatus.APPROVED
+          ? `آگهی «${ad.title}» توسط ناظرین تایید و در بازار آلمان منتشر شد.`
+          : `آگهی «${ad.title}» تایید نشد. دلیل: ${rejectionReason?.trim()}. می‌توانید اعتراض ثبت کنید.`,
+      type: status === AdStatus.APPROVED ? 'SUCCESS' : 'ERROR',
+      category: 'moderation',
+      link: status === AdStatus.APPROVED ? `/ad/${ad.id}` : '/profile?tab=appeals',
+    });
+    StorageService.addActivityLog({
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role === UserRole.EDITOR ? 'EDITOR' : 'ADMIN',
+      action: status === AdStatus.APPROVED ? 'AD_APPROVED' : 'AD_REJECTED',
+      targetType: 'AD',
+      targetId: ad.id,
+      details: rejectionReason?.trim() || ad.title,
+    });
+    loadAll();
   };
 
   const handleConfirmReject = () => {
@@ -168,27 +197,41 @@ export const AdminDashboard: React.FC = () => {
     setRejectReason('');
   };
 
+  const handleConfirmRemove = () => {
+    if (!removeModalAd || !user || !removeReason.trim()) return;
+    StorageService.removeAdWithReason(removeModalAd.id, removeReason.trim(), {
+      id: user.id,
+      name: user.name,
+      role: user.role === UserRole.EDITOR ? 'EDITOR' : 'ADMIN',
+    });
+    if (previewAd?.id === removeModalAd.id) setPreviewAd(null);
+    setRemoveModalAd(null);
+    setRemoveReason('');
+    loadAll();
+  };
+
   const handleDeleteAd = (adId: string) => {
-    if (window.confirm('آیا از حذف دائم این آگهی اطمینان دارید؟')) {
-      StorageService.deleteAd(adId);
-      if (previewAd?.id === adId) setPreviewAd(null);
-      loadAll();
-    }
+    const ad = StorageService.getAdById(adId);
+    if (ad) setRemoveModalAd(ad);
   };
 
   // Violation Report Actions
   const handleResolveReport = (reportId: string, action: 'RESOLVE_KEEP' | 'RESOLVE_DELETE_AD' | 'DISMISS', adId?: string) => {
     if (action === 'RESOLVE_DELETE_AD' && adId) {
-      if (window.confirm('آیا مایلید آگهی متخلف حذف و وضعیت گزارش به عنوان رسیدگی‌شده ثبت شود؟')) {
-        StorageService.deleteAd(adId);
+      const ad = StorageService.getAdById(adId);
+      if (ad) {
+        setRemoveModalAd(ad);
+        setRemoveReason('حذف به‌دلیل گزارش تخلف معتبر (DSA)');
         StorageService.updateViolationReportStatus(reportId, 'RESOLVED');
       }
     } else if (action === 'RESOLVE_KEEP') {
       StorageService.updateViolationReportStatus(reportId, 'RESOLVED');
+      loadAll();
     } else {
       StorageService.updateViolationReportStatus(reportId, 'DISMISSED');
+      loadAll();
     }
-    loadAll();
+    if (action !== 'RESOLVE_DELETE_AD') loadAll();
   };
 
   const handleDeleteReport = (reportId: string) => {
@@ -302,7 +345,9 @@ export const AdminDashboard: React.FC = () => {
 
   const pendingAdsCount = ads.filter(a => a.status === AdStatus.PENDING).length;
   const pendingReportsCount = reports.filter(r => r.status === 'PENDING').length;
+  const pendingAppealsCount = appeals.filter(a => a.status === 'PENDING').length;
   const unrepliedSupportCount = supportMessages.filter(s => !s.isReplied).length;
+  const rejectTemplates = StorageService.getSettings().rejectReasonTemplates;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -341,7 +386,10 @@ export const AdminDashboard: React.FC = () => {
       <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-gray-200 dark:border-gray-800">
         {[
           { id: 'ads', label: 'نظارت بر آگهی‌ها', count: pendingAdsCount, icon: SlidersHorizontal },
-          { id: 'reports', label: 'گزارش‌های تخلف', count: pendingReportsCount, icon: Flag, isWarning: true },
+          { id: 'reports', label: 'گزارش‌های تخلف (DSA)', count: pendingReportsCount, icon: Flag, isWarning: true },
+          { id: 'appeals', label: 'اعتراض‌ها', count: pendingAppealsCount, icon: Scale, isWarning: true },
+          { id: 'settings', label: 'تنظیمات و قوانین', icon: Settings2 },
+          { id: 'logs', label: 'لاگ فعالیت', icon: ScrollText },
           { id: 'categories', label: 'دسته‌بندی‌ها', icon: Layers },
           { id: 'cities', label: 'ایالت‌ها و شهرها', icon: MapPin },
           { id: 'support', label: 'پیام‌های پشتیبانی', count: unrepliedSupportCount, icon: MessageSquare },
@@ -406,6 +454,8 @@ export const AdminDashboard: React.FC = () => {
                 <option value={AdStatus.APPROVED}>تایید شده / منتشر شده ({ads.filter(a => a.status === AdStatus.APPROVED).length})</option>
                 <option value={AdStatus.PENDING}>در انتظار تایید ({ads.filter(a => a.status === AdStatus.PENDING).length})</option>
                 <option value={AdStatus.REJECTED}>رد شده ({ads.filter(a => a.status === AdStatus.REJECTED).length})</option>
+                <option value={AdStatus.REMOVED}>حذف‌شده ({ads.filter(a => a.status === AdStatus.REMOVED).length})</option>
+                <option value={AdStatus.EXPIRED}>منقضی ({ads.filter(a => a.status === AdStatus.EXPIRED).length})</option>
               </select>
 
               <select
@@ -629,7 +679,7 @@ export const AdminDashboard: React.FC = () => {
                         </div>
 
                         <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                          <span>گزارش‌دهنده: <strong className="text-gray-800 dark:text-gray-200">{rep.reporterName || 'کاربر مهمان'}</strong></span>
+                          <span>گزارش‌دهنده: <strong className="text-gray-800 dark:text-gray-200">{rep.reporterUserId ? `کاربر ${rep.reporterUserId.slice(0, 8)}` : 'کاربر'}</strong></span>
                           {rep.reporterContact && (
                             <span className="dir-ltr">({rep.reporterContact})</span>
                           )}
@@ -722,6 +772,18 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {/* 3. CATEGORIES TAB */}
+      {activeTab === 'appeals' && user && (
+        <AdminAppealsPanel user={user} appeals={appeals} onChanged={loadAll} />
+      )}
+
+      {activeTab === 'settings' && user && (
+        <AdminSettingsPanel user={user} onSaved={loadAll} />
+      )}
+
+      {activeTab === 'logs' && (
+        <AdminLogsPanel logs={activityLogs} />
+      )}
+
       {activeTab === 'categories' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Add Category Form */}
@@ -1177,13 +1239,27 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
             <p className="text-xs text-gray-500 leading-relaxed">
-              لطفاً دلیل رد آگهی «{rejectModalAd.title}» را برای اطلاع آگهی‌دهنده بنویسید:
+              رد آگهی بدون ذکر دلیل مجاز نیست. دلیل برای آگهی‌دهنده ارسال می‌شود و امکان اعتراض دارد.
             </p>
+            {rejectTemplates.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {rejectTemplates.map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setRejectReason(t)}
+                    className="px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-[10px] hover:bg-primary/10 hover:text-primary"
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
             <textarea
               rows={4}
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="مثلاً: تصاویر نامرتبط، قیمت غیرواقعی، اطلاعات ناقص..."
+              placeholder="دلیل رد را بنویسید..."
               className="w-full p-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs outline-none focus:border-primary leading-relaxed"
             />
             <div className="flex items-center justify-end gap-2">
@@ -1199,6 +1275,47 @@ export const AdminDashboard: React.FC = () => {
                 className="px-4 py-2 rounded-xl bg-primary hover:bg-secondary disabled:opacity-50 text-white text-xs font-bold"
               >
                 ثبت رد آگهی
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removeModalAd && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setRemoveModalAd(null)}
+        >
+          <div
+            className="bg-white dark:bg-gray-900 w-full max-w-md rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 p-5 sm:p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-gray-900 dark:text-white">حذف آگهی با ذکر دلیل</h3>
+              <button onClick={() => setRemoveModalAd(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">
+              حذف «{removeModalAd.title}» بدون دلیل مجاز نیست. کاربر می‌تواند اعتراض کند.
+            </p>
+            <textarea
+              rows={4}
+              value={removeReason}
+              onChange={(e) => setRemoveReason(e.target.value)}
+              placeholder="دلیل حذف..."
+              className="w-full p-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs outline-none focus:border-primary"
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setRemoveModalAd(null)} className="px-4 py-2 rounded-xl text-xs text-gray-500 hover:bg-gray-100">
+                انصراف
+              </button>
+              <button
+                onClick={handleConfirmRemove}
+                disabled={!removeReason.trim()}
+                className="px-4 py-2 rounded-xl bg-rose-600 disabled:opacity-50 text-white text-xs font-bold"
+              >
+                حذف با دلیل
               </button>
             </div>
           </div>

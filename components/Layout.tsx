@@ -74,7 +74,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const refreshNotifications = () => {
     if (user) {
-      const list = StorageService.getNotifications(user.id);
+      const list = StorageService.getNotifications(user.id, user.role);
       setNotifications(list);
       setUnreadCount(list.filter(n => !n.isRead).length);
     } else {
@@ -635,7 +635,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <h4 className="font-bold text-xs text-gray-900 dark:text-white mb-3">راهنمای کاربران</h4>
               <ul className="space-y-2 text-xs text-gray-500 dark:text-gray-400">
                 <li><Link to="/safety" className="hover:text-primary transition-colors">راهنمای خرید و معامله امن</Link></li>
-                <li><Link to="/contact" className="hover:text-primary transition-colors">قوانین و مقررات انتشار آگهی</Link></li>
+                <li><Link to="/rules" className="hover:text-primary transition-colors">قوانین و مقررات انتشار آگهی</Link></li>
+                <li><Link to="/banned" className="hover:text-primary transition-colors">کالا و خدمات ممنوعه</Link></li>
+                <li><Link to="/privacy" className="hover:text-primary transition-colors">حریم خصوصی (GDPR)</Link></li>
                 <li><Link to="/contact" className="hover:text-primary transition-colors">تماس با پشتیبانی بازار</Link></li>
                 <li><Link to="/new-ad" className="hover:text-primary transition-colors">ثبت آگهی رایگان در آلمان</Link></li>
               </ul>
