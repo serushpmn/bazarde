@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { StorageService } from '../services/storage';
 import { Ad, AdStatus, Category, Banner, AppNotification } from '../types';
 import { useAuth, useCity } from '../App';
@@ -11,7 +11,6 @@ import { HomeNotificationBanner } from '../components/NotificationList';
 import { hasValidAdImage } from '../lib/adImagePlaceholders';
 import { toPersianDigits } from '../lib/formatters';
 import { container } from '../lib/designTokens';
-import { Link, useNavigate } from 'react-router-dom';
 import {
   Search,
   SlidersHorizontal,
@@ -23,7 +22,6 @@ import {
 
 export const Home: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { selectedCity, setSelectedCity, cities } = useCity();
 
@@ -34,6 +32,7 @@ export const Home: React.FC = () => {
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [homeNotifs, setHomeNotifs] = useState<AppNotification[]>([]);
+  const [notifPopupOpen, setNotifPopupOpen] = useState(false);
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
@@ -57,9 +56,17 @@ export const Home: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      setHomeNotifs(StorageService.getNotifications(user.id, user.role));
+      const list = StorageService.getNotifications(user.id, user.role);
+      setHomeNotifs(list);
+      const hasAlert = list.some(
+        (n) =>
+          !n.isRead &&
+          (n.type === 'WARNING' || n.type === 'ERROR' || n.category === 'moderation' || n.category === 'expiry' || n.category === 'appeal')
+      );
+      if (hasAlert) setNotifPopupOpen(true);
     } else {
       setHomeNotifs([]);
+      setNotifPopupOpen(false);
     }
   }, [user]);
 
@@ -234,15 +241,25 @@ export const Home: React.FC = () => {
     <div className={`${container} py-5 sm:py-6 space-y-5`}>
       {user && (
         <HomeNotificationBanner
+          asPopup
+          isOpen={notifPopupOpen}
+          onClose={() => setNotifPopupOpen(false)}
           items={homeNotifs}
           onOpen={(n) => {
             StorageService.markNotificationRead(n.id);
-            setHomeNotifs(StorageService.getNotifications(user.id, user.role));
-            if (n.link) navigate(n.link);
+            const next = StorageService.getNotifications(user.id, user.role);
+            setHomeNotifs(next);
+            const stillAlert = next.some(
+              (x) =>
+                !x.isRead &&
+                (x.type === 'WARNING' || x.type === 'ERROR' || x.category === 'moderation' || x.category === 'expiry' || x.category === 'appeal')
+            );
+            if (!stillAlert) setNotifPopupOpen(false);
           }}
           onDismissAll={() => {
             StorageService.markAllNotificationsRead(user.id, user.role);
             setHomeNotifs(StorageService.getNotifications(user.id, user.role));
+            setNotifPopupOpen(false);
           }}
         />
       )}
@@ -435,7 +452,7 @@ export const Home: React.FC = () => {
             onAction={handleResetFilters}
           />
         ) : (
-          <div className={viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3' : 'space-y-3'}>
+          <div className={viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4' : 'space-y-3'}>
             {filteredAds.map((ad) => (
               <AdCard key={ad.id} ad={ad} viewMode={viewMode} />
             ))}

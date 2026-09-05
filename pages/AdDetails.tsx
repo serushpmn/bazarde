@@ -60,6 +60,7 @@ export const AdDetails: React.FC = () => {
 
   // Contact / Deposit Warning Modal
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [isSafetyModalOpen, setIsSafetyModalOpen] = useState(false);
 
   // Report Modal
   const [isReportOpen, setIsReportOpen] = useState(false);
@@ -83,6 +84,7 @@ export const AdDetails: React.FC = () => {
       if (e.key === 'Escape') {
         setIsContactModalOpen(false);
         setIsReportOpen(false);
+        setIsSafetyModalOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -571,10 +573,17 @@ export const AdDetails: React.FC = () => {
               </button>
             </div>
 
-            <Link to="/safety" className="flex items-center justify-between py-2 text-xs text-primary font-semibold hover:underline">
-              <span>زنگ خطر</span>
+            <button
+              type="button"
+              onClick={() => setIsSafetyModalOpen(true)}
+              className="flex items-center justify-between w-full py-2 text-xs text-primary font-semibold hover:underline"
+            >
+              <span className="flex items-center gap-1.5">
+                <ShieldAlert className="w-4 h-4" />
+                زنگ خطر
+              </span>
               <ChevronLeft className="w-4 h-4" />
-            </Link>
+            </button>
           </div>
         </div>
 
@@ -744,9 +753,16 @@ export const AdDetails: React.FC = () => {
                 <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-amber-600 mt-0.5" />
                 <p className="text-[10px] text-amber-900/80 dark:text-amber-200/80 leading-relaxed">
                   قبل از دیدن کالا بیعانه نپردازید.{' '}
-                  <Link to="/safety" onClick={() => setIsContactModalOpen(false)} className="font-bold text-primary hover:underline">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsContactModalOpen(false);
+                      setIsSafetyModalOpen(true);
+                    }}
+                    className="font-bold text-primary hover:underline"
+                  >
                     راهنمای امنیت
-                  </Link>
+                  </button>
                 </p>
               </div>
 
@@ -942,6 +958,51 @@ export const AdDetails: React.FC = () => {
           </div>
         </div>
       )}
+
+      <Modal
+        isOpen={isSafetyModalOpen}
+        onClose={() => setIsSafetyModalOpen(false)}
+        title="زنگ خطر و معامله امن"
+        size="md"
+        footer={
+          <button
+            type="button"
+            onClick={() => setIsSafetyModalOpen(false)}
+            className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-bold"
+          >
+            متوجه شدم
+          </button>
+        }
+      >
+        <div className="space-y-3 text-xs text-gray-700 dark:text-gray-300">
+          <div className="flex gap-2 p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/40 text-rose-800 dark:text-rose-200">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <p className="leading-relaxed font-medium">
+              هرگز قبل از بازدید حضوری و قرارداد معتبر، بیعانه یا ودیعه (Kaution) پرداخت نکنید.
+            </p>
+          </div>
+          <ul className="space-y-2.5">
+            <li className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 leading-relaxed">
+              <strong className="text-gray-900 dark:text-white">بیعانه قبل از بازدید:</strong> درخواست پول پیش برای رزرو مسکن یا کالا تقریباً همیشه کلاهبرداری است.
+            </li>
+            <li className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 leading-relaxed">
+              <strong className="text-gray-900 dark:text-white">قیمت غیرواقعی:</strong> قیمت خیلی پایین‌تر از عرف بازار نشانه طعمه است.
+            </li>
+            <li className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 leading-relaxed">
+              <strong className="text-gray-900 dark:text-white">پرداخت ناامن:</strong> از PayPal Friends، کریپتو یا وسترن یونیون برای افراد ناشناس استفاده نکنید.
+            </li>
+            <li className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 leading-relaxed">
+              <strong className="text-gray-900 dark:text-white">مدارک هویتی:</strong> پاسپورت یا کارت اقامت را برای افراد ناشناس نفرستید.
+            </li>
+            <li className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 leading-relaxed">
+              <strong className="text-gray-900 dark:text-white">معامله حضوری:</strong> در مکان عمومی ملاقات کنید و کالا را قبل از پرداخت بررسی کنید.
+            </li>
+          </ul>
+          <p className="text-[11px] text-gray-500 leading-relaxed">
+            در صورت مشکوک بودن آگهی، از دکمه «گزارش تخلف» استفاده کنید.
+          </p>
+        </div>
+      </Modal>
 
     </div>
   );
