@@ -1,10 +1,11 @@
 # Persistence model (“Database”)
 
-There is **no SQL/Postgres/Supabase schema in use** by the running app.
+## Active runtimes
 
-Data is JSON in **browser `localStorage`**, managed by `StorageService` (`services/storage.ts`).
+1. **Browser localStorage** via `StorageService` (default SPA path).
+2. **PostgreSQL** via Express API in `server/` — see [POSTGRES.md](./POSTGRES.md).
 
-Supabase is only scaffolded (`lib/supabaseClient.ts`, `services/imageService.ts`) and is **not** the live database.
+Supabase client remains unused scaffolding.
 
 ---
 
@@ -27,6 +28,9 @@ Supabase is only scaffolded (`lib/supabaseClient.ts`, `services/imageService.ts`
 | `bazaar_de_settings_v3` | `PlatformSettings` | Expiry, legal texts, banned list |
 | `bazaar_de_appeals_v3` | `Appeal[]` | Appeals |
 | `bazaar_de_activity_logs_v3` | `ActivityLog[]` | Cap ~1000 |
+| `bazaar_de_account_deletion_requests_v1` | `AccountDeletionRequest[]` | Deletion audit |
+| `bazaar_de_phone_restrictions_v1` | `PhoneRestriction[]` | Ban/abuse blocklist |
+| `bazaar_de_otps_v1` | `OtpChallenge[]` | Client OTP demo store |
 | `bazaar_theme` | `'dark'\|'light'` | App.tsx |
 | `bazaar_viewing_city` | city string | CityProvider |
 
@@ -36,7 +40,13 @@ Supabase is only scaffolded (`lib/supabaseClient.ts`, `services/imageService.ts`
 
 ### users
 
-Important fields: `id`, `name`, `phone` (primary contact / GDPR), `city?`, `role`, `avatar?`, `createdAt?`, `savedAdIds?`
+Important fields: `id`, `name`, `phone`, `accountStatus`, deletion/deactivation timestamps, `bannedAt?`, `avatar?`, `role`, …
+
+**AccountStatus:** `ACTIVE` | `PENDING_DELETION` | `DEACTIVATED` | `SUSPENDED` | `BANNED` | `DELETED` | `ANONYMIZED`
+
+### ads
+
+Statuses include `PAUSED` and `ARCHIVED_ACCOUNT_DELETION` for lifecycle hides (not public).
 
 Ownership: user owns own profile; admin list is read-mostly.
 

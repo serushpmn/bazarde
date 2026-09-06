@@ -17,9 +17,20 @@ import {
   ActivityLog,
   ActivityActor,
   ManagedCity,
+  AccountDeletionRequest,
+  AccountDeletionReasonCode,
+  PhoneRestriction,
 } from '../types';
 import { DEFAULT_PLATFORM_SETTINGS, MS_PER_DAY } from '../lib/platformDefaults';
 import { sanitizeUserAvatar } from '../lib/defaultAvatars';
+import {
+  ACCOUNT_DELETION_GRACE_MS,
+  ACTIVE_AD_STATUSES,
+  MAX_ACTIVE_ADS_PER_USER,
+  getAccountStatus,
+  phoneBlocksNewRegistration,
+} from '../lib/accountLifecycle';
+import { OtpService } from '../lib/otpService';
 
 const STORAGE_KEYS = {
   USERS: 'bazaar_de_users_v3',
@@ -37,6 +48,8 @@ const STORAGE_KEYS = {
   SETTINGS: 'bazaar_de_settings_v3',
   APPEALS: 'bazaar_de_appeals_v3',
   ACTIVITY_LOGS: 'bazaar_de_activity_logs_v3',
+  ACCOUNT_DELETION_REQUESTS: 'bazaar_de_account_deletion_requests_v1',
+  PHONE_RESTRICTIONS: 'bazaar_de_phone_restrictions_v1',
 };
 
 // Initial Realistic Seed Ads across Germany
@@ -686,22 +699,56 @@ export const StorageService = {
   // Users & Auth
   getUsers: (): User[] => {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]') as User[];
+      return raw.map(u => ({
+        ...u,
+        accountStatus: u.accountStatus || 'ACTIVE',
+      }));
     } catch {
       return [];
     }
+  },
+
+  getUserById: (id: string): User | null =>
+    StorageService.getUsers().find(u => u.id === id) || null,
+
+  /** Find non-anonymized account that still holds this phone */
+  findUserByPhone: (phone: string): User | null => {
+    const trimmed = phone.trim();
+    return (
+      StorageService.getUsers().find(u => {
+        if (!u.phone || u.phone.trim() !== trimmed) return false;
+        const s = getAccountStatus(u);
+        return s !== 'ANONYMIZED' && s !== 'DELETED';
+      }) || null
+    );
   },
 
   saveUser: (user: User) => {
     const sanitized: User = {
       id: user.id,
       name: user.name.trim(),
-      phone: user.phone.trim(),
+      phone: user.phone?.trim() || '',
       city: user.city?.trim() || undefined,
       role: user.role,
       avatar: sanitizeUserAvatar(user.avatar),
       createdAt: user.createdAt,
+      updatedAt: Date.now(),
       savedAdIds: user.savedAdIds,
+      accountStatus: user.accountStatus || 'ACTIVE',
+      deletionRequestedAt: user.deletionRequestedAt,
+      deletionScheduledAt: user.deletionScheduledAt,
+      deletionCancelledAt: user.deletionCancelledAt,
+      deletedAt: user.deletedAt,
+      anonymizedAt: user.anonymizedAt,
+      deletionReason: user.deletionReason,
+      deletionReasonDetails: user.deletionReasonDetails,
+      deactivatedAt: user.deactivatedAt,
+      bannedAt: user.bannedAt,
+      banReason: user.banReason,
+      suspendedAt: user.suspendedAt,
+      suspensionReason: user.suspensionReason,
+      phoneVerifiedAt: user.phoneVerifiedAt,
     };
     const users = StorageService.getUsers();
     const idx = users.findIndex(u => u.id === sanitized.id);
@@ -713,7 +760,499 @@ export const StorageService = {
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   },
 
+  countActiveAdsForUser: (userId: string): number =>
+    StorageService.getAds().filter(
+      a => a.userId === userId && ACTIVE_AD_STATUSES.includes(a.status)
+    ).length,
+
+  canCreateAd: (userId: string): { ok: boolean; reason?: string } => {
+    const user = StorageService.getUserById(userId);
+    if (!user) return { ok: false, reason: 'کاربر یافت نشد.' };
+    if (getAccountStatus(user) !== 'ACTIVE') {
+      return { ok: false, reason: 'حساب شما برای ثبت آگهی فعال نیست.' };
+    }
+    if (StorageService.countActiveAdsForUser(userId) >= MAX_ACTIVE_ADS_PER_USER) {
+      return {
+        ok: false,
+        reason: `حداکثر ${MAX_ACTIVE_ADS_PER_USER} آگهی فعال/در انتظار مجاز است.`,
+      };
+    }
+    return { ok: true };
+  },
+
+  getPhoneRestrictions: (): PhoneRestriction[] => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.PHONE_RESTRICTIONS) || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  isPhoneRestricted: (phone: string): PhoneRestriction | null => {
+    const p = phone.trim();
+    return StorageService.getPhoneRestrictions().find(r => r.phone === p) || null;
+  },
+
+  addPhoneRestriction: (restriction: PhoneRestriction) => {
+    const list = StorageService.getPhoneRestrictions().filter(r => r.phone !== restriction.phone);
+    list.push(restriction);
+    localStorage.setItem(STORAGE_KEYS.PHONE_RESTRICTIONS, JSON.stringify(list));
+  },
+
+  getDeletionRequests: (): AccountDeletionRequest[] => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCOUNT_DELETION_REQUESTS) || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  saveDeletionRequests: (list: AccountDeletionRequest[]) => {
+    localStorage.setItem(
+      STORAGE_KEYS.ACCOUNT_DELETION_REQUESTS,
+      JSON.stringify(list.slice(-500))
+    );
+  },
+
+  /** Hide public/pending ads when account is paused or pending deletion */
+  archiveUserPublicAds: (
+    userId: string,
+    mode: 'ACCOUNT_DELETION' | 'DEACTIVATION'
+  ): number => {
+    const ads = StorageService.getAds();
+    let n = 0;
+    const targetStatus =
+      mode === 'ACCOUNT_DELETION'
+        ? AdStatus.ARCHIVED_ACCOUNT_DELETION
+        : AdStatus.PAUSED;
+    const hideable = [AdStatus.APPROVED, AdStatus.PENDING];
+    ads.forEach(ad => {
+      if (ad.userId !== userId) return;
+      if (!hideable.includes(ad.status)) return;
+      ad.previousStatus = ad.status;
+      ad.status = targetStatus;
+      ad.archivedAt = Date.now();
+      ad.deletionReason =
+        mode === 'ACCOUNT_DELETION' ? 'account_pending_deletion' : 'account_deactivated';
+      n += 1;
+    });
+    localStorage.setItem(STORAGE_KEYS.ADS, JSON.stringify(ads));
+    return n;
+  },
+
+  /**
+   * After restore: archived-for-deletion ads become PAUSED (not auto-public).
+   * After reactivation from deactivate: keep PAUSED.
+   */
+  pauseArchivedDeletionAds: (userId: string): number => {
+    const ads = StorageService.getAds();
+    let n = 0;
+    ads.forEach(ad => {
+      if (ad.userId !== userId) return;
+      if (ad.status !== AdStatus.ARCHIVED_ACCOUNT_DELETION) return;
+      ad.status = AdStatus.PAUSED;
+      ad.deletionReason = 'awaiting_manual_republish';
+      n += 1;
+    });
+    localStorage.setItem(STORAGE_KEYS.ADS, JSON.stringify(ads));
+    return n;
+  },
+
+  requestAccountDeletion: (params: {
+    userId: string;
+    otpCode: string;
+    reason?: AccountDeletionReasonCode;
+    reasonDetails?: string;
+  }): { ok: boolean; error?: string; scheduledAt?: number } => {
+    const user = StorageService.getUserById(params.userId);
+    if (!user) return { ok: false, error: 'کاربر یافت نشد.' };
+
+    const status = getAccountStatus(user);
+    if (status === 'BANNED' || status === 'SUSPENDED') {
+      return {
+        ok: false,
+        error: 'حساب محدود یا مسدود است و نمی‌تواند از طریق حذف، محدودیت را دور بزند. با پشتیبانی تماس بگیرید.',
+      };
+    }
+    if (status === 'PENDING_DELETION') {
+      return { ok: false, error: 'درخواست حذف قبلاً ثبت شده است.' };
+    }
+    if (status === 'ANONYMIZED' || status === 'DELETED') {
+      return { ok: false, error: 'این حساب دیگر قابل حذف نیست.' };
+    }
+    if (!user.phone) return { ok: false, error: 'شماره موبایل ثبت نشده است.' };
+
+    const otp = OtpService.verifyOtp({
+      phone: user.phone,
+      purpose: 'account_deletion',
+      code: params.otpCode,
+    });
+    if (!otp.ok) return { ok: false, error: otp.error };
+
+    const now = Date.now();
+    const scheduledAt = now + ACCOUNT_DELETION_GRACE_MS;
+
+    const req: AccountDeletionRequest = {
+      id: `del-req-${now}`,
+      userId: user.id,
+      requestedAt: now,
+      scheduledFor: scheduledAt,
+      reason: params.reason || 'SKIPPED',
+      reasonDetails: params.reasonDetails?.trim() || undefined,
+      status: 'PENDING',
+      createdAt: now,
+    };
+    const reqs = StorageService.getDeletionRequests();
+    // Cancel any older pending for this user
+    reqs.forEach(r => {
+      if (r.userId === user.id && r.status === 'PENDING') {
+        r.status = 'CANCELLED';
+        r.cancelledAt = now;
+      }
+    });
+    reqs.push(req);
+    StorageService.saveDeletionRequests(reqs);
+
+    StorageService.archiveUserPublicAds(user.id, 'ACCOUNT_DELETION');
+
+    StorageService.saveUser({
+      ...user,
+      accountStatus: 'PENDING_DELETION',
+      deletionRequestedAt: now,
+      deletionScheduledAt: scheduledAt,
+      deletionCancelledAt: undefined,
+      deletionReason: params.reason || 'SKIPPED',
+      deletionReasonDetails: params.reasonDetails?.trim() || undefined,
+      avatar: undefined,
+    });
+
+    StorageService.addNotification({
+      userId: user.id,
+      title: 'درخواست حذف حساب ثبت شد',
+      message: `حساب شما در وضعیت حذف موقت است و در تاریخ برنامه‌ریزی‌شده به‌طور نهایی پردازش می‌شود. تا آن زمان می‌توانید حساب را بازیابی کنید.`,
+      type: 'WARNING',
+      category: 'system',
+      link: '/profile?tab=settings',
+    });
+
+    StorageService.addActivityLog({
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: 'USER',
+      action: 'account_deletion_requested',
+      targetType: 'USER',
+      targetId: user.id,
+      details: `scheduled=${scheduledAt}; reason=${params.reason || 'SKIPPED'}`,
+    });
+
+    return { ok: true, scheduledAt };
+  },
+
+  cancelAccountDeletion: (userId: string): { ok: boolean; error?: string } => {
+    const user = StorageService.getUserById(userId);
+    if (!user) return { ok: false, error: 'کاربر یافت نشد.' };
+    if (getAccountStatus(user) !== 'PENDING_DELETION') {
+      return { ok: false, error: 'حساب در وضعیت حذف موقت نیست.' };
+    }
+
+    const now = Date.now();
+    const reqs = StorageService.getDeletionRequests();
+    reqs.forEach(r => {
+      if (r.userId === userId && r.status === 'PENDING') {
+        r.status = 'CANCELLED';
+        r.cancelledAt = now;
+      }
+    });
+    StorageService.saveDeletionRequests(reqs);
+
+    StorageService.pauseArchivedDeletionAds(userId);
+
+    StorageService.saveUser({
+      ...user,
+      accountStatus: 'ACTIVE',
+      deletionRequestedAt: undefined,
+      deletionScheduledAt: undefined,
+      deletionCancelledAt: now,
+      deletionReason: undefined,
+      deletionReasonDetails: undefined,
+    });
+
+    StorageService.addNotification({
+      userId,
+      title: 'حساب بازیابی شد',
+      message:
+        'حساب شما فعال شد. آگهی‌های قبلی به‌صورت خودکار منتشر نمی‌شوند؛ از «آگهی‌های من» آن‌ها را مدیریت و در صورت تمایل دوباره منتشر کنید.',
+      type: 'SUCCESS',
+      category: 'system',
+      link: '/profile?tab=my_ads',
+    });
+
+    StorageService.addActivityLog({
+      actorId: userId,
+      actorName: user.name,
+      actorRole: 'USER',
+      action: 'account_deletion_cancelled',
+      targetType: 'USER',
+      targetId: userId,
+      details: 'account_restored',
+    });
+
+    return { ok: true };
+  },
+
+  deactivateAccount: (userId: string): { ok: boolean; error?: string } => {
+    const user = StorageService.getUserById(userId);
+    if (!user) return { ok: false, error: 'کاربر یافت نشد.' };
+    const status = getAccountStatus(user);
+    if (status === 'BANNED' || status === 'SUSPENDED') {
+      return { ok: false, error: 'حساب محدود است و قابل توقف موقت نیست.' };
+    }
+    if (status !== 'ACTIVE') {
+      return { ok: false, error: 'فقط حساب فعال قابل توقف موقت است.' };
+    }
+
+    StorageService.archiveUserPublicAds(userId, 'DEACTIVATION');
+    StorageService.saveUser({
+      ...user,
+      accountStatus: 'DEACTIVATED',
+      deactivatedAt: Date.now(),
+      avatar: undefined,
+    });
+    StorageService.addActivityLog({
+      actorId: userId,
+      actorName: user.name,
+      actorRole: 'USER',
+      action: 'account_deactivated',
+      targetType: 'USER',
+      targetId: userId,
+    });
+    StorageService.addNotification({
+      userId,
+      title: 'حساب موقتاً غیرفعال شد',
+      message: 'پروفایل و آگهی‌های شما از دید عموم مخفی شدند. هر زمان می‌توانید حساب را دوباره فعال کنید.',
+      type: 'INFO',
+      category: 'system',
+      link: '/profile?tab=settings',
+    });
+    return { ok: true };
+  },
+
+  reactivateAccount: (userId: string): { ok: boolean; error?: string } => {
+    const user = StorageService.getUserById(userId);
+    if (!user) return { ok: false, error: 'کاربر یافت نشد.' };
+    if (getAccountStatus(user) !== 'DEACTIVATED') {
+      return { ok: false, error: 'حساب در وضعیت توقف موقت نیست.' };
+    }
+    // Ads stay PAUSED — user republishes manually
+    StorageService.saveUser({
+      ...user,
+      accountStatus: 'ACTIVE',
+      deactivatedAt: undefined,
+    });
+    StorageService.addActivityLog({
+      actorId: userId,
+      actorName: user.name,
+      actorRole: 'USER',
+      action: 'account_reactivated',
+      targetType: 'USER',
+      targetId: userId,
+    });
+    StorageService.addNotification({
+      userId,
+      title: 'حساب دوباره فعال شد',
+      message: 'آگهی‌های شما همچنان غیرفعال‌اند؛ در صورت تمایل آن‌ها را از پروفایل دوباره منتشر کنید.',
+      type: 'SUCCESS',
+      category: 'system',
+      link: '/profile?tab=my_ads',
+    });
+    return { ok: true };
+  },
+
+  changeUserPhone: (params: {
+    userId: string;
+    newPhone: string;
+    otpCode: string;
+  }): { ok: boolean; error?: string } => {
+    const user = StorageService.getUserById(params.userId);
+    if (!user) return { ok: false, error: 'کاربر یافت نشد.' };
+    if (getAccountStatus(user) !== 'ACTIVE') {
+      return { ok: false, error: 'فقط حساب فعال می‌تواند شماره را تغییر دهد.' };
+    }
+    const newPhone = params.newPhone.trim();
+    if (!newPhone) return { ok: false, error: 'شماره جدید نامعتبر است.' };
+    if (StorageService.isPhoneRestricted(newPhone)) {
+      return { ok: false, error: 'این شماره مجاز به ثبت نیست.' };
+    }
+    const holder = StorageService.findUserByPhone(newPhone);
+    if (holder && holder.id !== user.id && phoneBlocksNewRegistration(getAccountStatus(holder))) {
+      return { ok: false, error: 'این شماره متعلق به حساب فعال دیگری است.' };
+    }
+
+    const otp = OtpService.verifyOtp({
+      phone: newPhone,
+      purpose: 'change_phone',
+      code: params.otpCode,
+    });
+    if (!otp.ok) return { ok: false, error: otp.error };
+
+    StorageService.saveUser({
+      ...user,
+      phone: newPhone,
+      phoneVerifiedAt: Date.now(),
+    });
+    StorageService.addActivityLog({
+      actorId: user.id,
+      actorRole: 'USER',
+      action: 'phone_changed',
+      targetType: 'USER',
+      targetId: user.id,
+    });
+    return { ok: true };
+  },
+
+  republishPausedAd: (adId: string, userId: string): { ok: boolean; error?: string } => {
+    const ad = StorageService.getAdById(adId);
+    if (!ad || ad.userId !== userId) return { ok: false, error: 'آگهی یافت نشد.' };
+    if (ad.status !== AdStatus.PAUSED) {
+      return { ok: false, error: 'فقط آگهی‌های متوقف‌شده قابل انتشار مجدد هستند.' };
+    }
+    const user = StorageService.getUserById(userId);
+    if (!user || getAccountStatus(user) !== 'ACTIVE') {
+      return { ok: false, error: 'حساب برای انتشار فعال نیست.' };
+    }
+    const limit = StorageService.canCreateAd(userId);
+    // republish counts like creating — check after excluding this paused ad conceptually
+    const activeCount = StorageService.countActiveAdsForUser(userId);
+    if (activeCount >= MAX_ACTIVE_ADS_PER_USER) {
+      return { ok: false, error: limit.reason };
+    }
+
+    const ads = StorageService.getAds();
+    const idx = ads.findIndex(a => a.id === adId);
+    if (idx < 0) return { ok: false, error: 'آگهی یافت نشد.' };
+    ads[idx] = {
+      ...ads[idx],
+      status: AdStatus.PENDING,
+      previousStatus: undefined,
+      archivedAt: undefined,
+      deletionReason: undefined,
+    };
+    localStorage.setItem(STORAGE_KEYS.ADS, JSON.stringify(ads));
+    return { ok: true };
+  },
+
+  /**
+   * Idempotent final processor — call on app boot (like expiry).
+   * Anonymizes PII, clears images, frees phone (unless restricted).
+   */
+  processPendingAccountDeletions: (): number => {
+    const now = Date.now();
+    let processed = 0;
+    const users = StorageService.getUsers();
+
+    users.forEach(user => {
+      if (getAccountStatus(user) !== 'PENDING_DELETION') return;
+      if (!user.deletionScheduledAt || user.deletionScheduledAt > now) return;
+
+      // Security: banned never frees phone via this path
+      if (user.bannedAt || getAccountStatus(user) === 'BANNED') {
+        if (user.phone) {
+          StorageService.addPhoneRestriction({
+            phone: user.phone,
+            reason: 'BANNED',
+            createdAt: now,
+            note: 'Preserved after deletion attempt of banned account',
+          });
+        }
+      }
+
+      const ads = StorageService.getAds();
+      ads.forEach(ad => {
+        if (ad.userId !== user.id) return;
+        // Wipe personal content; keep id/category/price/city for stats shape
+        ad.title = '[آگهی حذف‌شده]';
+        ad.description = '';
+        ad.images = [];
+        ad.contactPhone = '';
+        ad.showPhone = false;
+        ad.allowWhatsapp = false;
+        ad.telegramId = undefined;
+        ad.showTelegram = false;
+        ad.status = AdStatus.REMOVED;
+        ad.removalReason = 'account_anonymized';
+        ad.removedAt = now;
+        ad.removedBy = 'SYSTEM';
+        ad.archivedAt = now;
+      });
+      localStorage.setItem(STORAGE_KEYS.ADS, JSON.stringify(ads));
+
+      const phone = user.phone;
+      StorageService.saveUser({
+        ...user,
+        name: 'کاربر حذف‌شده',
+        phone: '',
+        city: undefined,
+        avatar: undefined,
+        accountStatus: 'ANONYMIZED',
+        anonymizedAt: now,
+        deletedAt: now,
+        deletionRequestedAt: user.deletionRequestedAt,
+        deletionScheduledAt: user.deletionScheduledAt,
+        savedAdIds: [],
+      });
+
+      const reqs = StorageService.getDeletionRequests();
+      reqs.forEach(r => {
+        if (r.userId === user.id && r.status === 'PENDING') {
+          r.status = 'COMPLETED';
+          r.completedAt = now;
+        }
+      });
+      StorageService.saveDeletionRequests(reqs);
+
+      // Clear user notifications
+      try {
+        const notifs = JSON.parse(
+          localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]'
+        ) as AppNotification[];
+        localStorage.setItem(
+          STORAGE_KEYS.NOTIFICATIONS,
+          JSON.stringify(notifs.filter(n => n.userId !== user.id))
+        );
+      } catch {
+        /* ignore */
+      }
+
+      StorageService.addActivityLog({
+        actorRole: 'SYSTEM',
+        action: 'account_deletion_completed',
+        targetType: 'USER',
+        targetId: user.id,
+        details: phone ? `phone_released` : 'anonymized',
+      });
+      processed += 1;
+    });
+
+    return processed;
+  },
+
+  /** @deprecated Prefer requestAccountDeletion — kept for emergency hard wipe */
   deleteUserAccount: (userId: string) => {
+    // Soft-path: if active, start deletion without OTP only for legacy callers — redirect to anonymize immediately is wrong.
+    // Keep hard-delete for backwards compat but prefer lifecycle.
+    const user = StorageService.getUserById(userId);
+    if (user && getAccountStatus(user) === 'ACTIVE') {
+      StorageService.archiveUserPublicAds(userId, 'ACCOUNT_DELETION');
+      const now = Date.now();
+      StorageService.saveUser({
+        ...user,
+        accountStatus: 'PENDING_DELETION',
+        deletionRequestedAt: now,
+        deletionScheduledAt: now + ACCOUNT_DELETION_GRACE_MS,
+        avatar: undefined,
+      });
+      return;
+    }
     const users = StorageService.getUsers().filter(u => u.id !== userId);
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
     const ads = StorageService.getAds().filter(a => a.userId !== userId);
@@ -727,7 +1266,7 @@ export const StorageService = {
       action: 'ACCOUNT_DELETED',
       targetType: 'USER',
       targetId: userId,
-      details: 'حذف حساب کاربری توسط خود کاربر (GDPR)',
+      details: 'legacy hard delete',
     });
   },
 
@@ -1194,5 +1733,56 @@ export const StorageService = {
     localStorage.removeItem(STORAGE_KEYS.APPEALS);
     localStorage.removeItem(STORAGE_KEYS.ACTIVITY_LOGS);
     seedData();
-  }
+  },
+
+  /** Snapshot for PostgreSQL POST /api/import */
+  exportLocalDump: () => ({
+    users: StorageService.getUsers(),
+    ads: StorageService.getAds(),
+    categories: StorageService.getCategories({ includeInactive: true }),
+    cities: StorageService.getCityRecords(),
+    banners: StorageService.getBanners({ includeInactive: true }),
+    settings: StorageService.getSettings(),
+    notifications: JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]'),
+    violationReports: StorageService.getViolationReports(),
+    appeals: StorageService.getAppeals(),
+    supportMessages: StorageService.getSupportMessages(),
+    accountDeletionRequests: StorageService.getDeletionRequests(),
+    phoneRestrictions: StorageService.getPhoneRestrictions(),
+  }),
+
+  /** Load bootstrap payload from API into localStorage (keeps sync StorageService API) */
+  applyRemoteBootstrap: (data: {
+    users?: User[];
+    ads?: Ad[];
+    categories?: Category[];
+    cities?: ManagedCity[];
+    banners?: Banner[];
+    settings?: PlatformSettings;
+    notifications?: AppNotification[];
+    violationReports?: ViolationReport[];
+    appeals?: Appeal[];
+    supportMessages?: SupportMessage[];
+    accountDeletionRequests?: AccountDeletionRequest[];
+    phoneRestrictions?: PhoneRestriction[];
+    activityLogs?: ActivityLog[];
+  }) => {
+    if (data.users) localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(data.users));
+    if (data.ads) localStorage.setItem(STORAGE_KEYS.ADS, JSON.stringify(data.ads));
+    if (data.categories) localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(data.categories));
+    if (data.cities) localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(data.cities));
+    if (data.banners) localStorage.setItem(STORAGE_KEYS.BANNERS, JSON.stringify(data.banners));
+    if (data.settings) localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(data.settings));
+    if (data.notifications) localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(data.notifications));
+    if (data.violationReports) localStorage.setItem(STORAGE_KEYS.VIOLATION_REPORTS, JSON.stringify(data.violationReports));
+    if (data.appeals) localStorage.setItem(STORAGE_KEYS.APPEALS, JSON.stringify(data.appeals));
+    if (data.supportMessages) localStorage.setItem(STORAGE_KEYS.SUPPORT_MESSAGES, JSON.stringify(data.supportMessages));
+    if (data.activityLogs) localStorage.setItem(STORAGE_KEYS.ACTIVITY_LOGS, JSON.stringify(data.activityLogs));
+    if (data.accountDeletionRequests) {
+      localStorage.setItem(STORAGE_KEYS.ACCOUNT_DELETION_REQUESTS, JSON.stringify(data.accountDeletionRequests));
+    }
+    if (data.phoneRestrictions) {
+      localStorage.setItem(STORAGE_KEYS.PHONE_RESTRICTIONS, JSON.stringify(data.phoneRestrictions));
+    }
+  },
 };

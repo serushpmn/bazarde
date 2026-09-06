@@ -526,18 +526,57 @@ export const AdminDashboard: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            if (window.confirm('آیا می‌خواهید داده‌های تستی آلمان بازیابی شوند؟')) {
-              StorageService.resetToDefaults();
-              loadAll();
-            }
-          }}
-          className="px-3.5 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold flex items-center gap-1.5 transition-colors self-end sm:self-auto"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>بازنشانی آگهی‌های تستی آلمان</span>
-        </button>
+        <div className="flex flex-wrap gap-2 self-end sm:self-auto">
+          <button
+            type="button"
+            onClick={async () => {
+              const { pushToPostgres, isPostgresApiEnabled } = await import('../services/postgresSync');
+              if (!isPostgresApiEnabled()) {
+                window.alert('VITE_API_URL در .env.local تنظیم نشده است. راهنما: docs/POSTGRES.md');
+                return;
+              }
+              if (!window.confirm('داده‌های فعلی مرورگر به PostgreSQL ارسال شود؟')) return;
+              const r = await pushToPostgres();
+              window.alert(r.ok ? `ارسال شد: ${JSON.stringify(r.imported)}` : `خطا: ${r.error}`);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold border border-emerald-200 dark:border-emerald-800"
+          >
+            ارسال به PostgreSQL
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const { pullFromPostgres, isPostgresApiEnabled } = await import('../services/postgresSync');
+              if (!isPostgresApiEnabled()) {
+                window.alert('VITE_API_URL در .env.local تنظیم نشده است.');
+                return;
+              }
+              if (!window.confirm('داده از PostgreSQL خوانده و جایگزین localStorage شود؟')) return;
+              const r = await pullFromPostgres();
+              if (r.ok) {
+                loadAll();
+                window.alert('دریافت از PostgreSQL انجام شد.');
+              } else {
+                window.alert(`خطا: ${r.error}`);
+              }
+            }}
+            className="px-3.5 py-2 rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200 text-xs font-bold border border-sky-200 dark:border-sky-800"
+          >
+            دریافت از PostgreSQL
+          </button>
+          <button
+            onClick={() => {
+              if (window.confirm('آیا می‌خواهید داده‌های تستی آلمان بازیابی شوند؟')) {
+                StorageService.resetToDefaults();
+                loadAll();
+              }
+            }}
+            className="px-3.5 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold flex items-center gap-1.5 transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>بازنشانی آگهی‌های تستی آلمان</span>
+          </button>
+        </div>
       </div>
 
       {/* Tabs Navigation — wrap so all tabs stay visible */}

@@ -17,6 +17,20 @@ Only decisions confidently inferred from the codebase. Speculative history is ma
 
 ---
 
+## Decision: PostgreSQL via Express API (2026-09)
+
+**Evidence:** `server/` (Express + `pg`), `docs/POSTGRES.md`, `services/postgresSync.ts`.
+
+**Reason:** User installed PostgreSQL on Windows; browsers cannot talk to PG directly.
+
+**Consequences:**
+
+- Phase 1: SPA still uses `StorageService`/localStorage for runtime; pull/push sync with PG.
+- Phase 2 (future): dual-write or fully async API client.
+- Requires `DATABASE_URL` and running API on port 4000.
+
+---
+
 ## Decision: HashRouter
 
 **Evidence:** `App.tsx` uses `HashRouter`.

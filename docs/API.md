@@ -35,13 +35,21 @@ If you need an “API” for agents, use **StorageService** below.
 | `processExpiredAds` | Approve→Expired | Notifies owners |
 | `incrementAdViews` | View counter | |
 
-### Users / session
+### Users / session / account lifecycle
 
 | Method | Purpose |
 |--------|---------|
-| `getUsers` / `saveUser` | Account list; sanitizes fields |
-| `deleteUserAccount` | GDPR erase user+ads+notifs |
+| `getUsers` / `saveUser` / `getUserById` / `findUserByPhone` | Accounts; default `accountStatus=ACTIVE` |
+| `requestAccountDeletion` | OTP-gated → `PENDING_DELETION`, archive ads, 30d schedule |
+| `cancelAccountDeletion` | Restore → `ACTIVE`; ads → `PAUSED` |
+| `deactivateAccount` / `reactivateAccount` | Pause without permanent delete |
+| `changeUserPhone` | OTP on new phone + uniqueness |
+| `processPendingAccountDeletions` | Idempotent final anonymize (boot) |
+| `canCreateAd` / `countActiveAdsForUser` / `republishPausedAd` | 5-ad limit + republish |
+| `deleteUserAccount` | Legacy; prefers soft pending deletion |
 | `getCurrentUser` / `setCurrentUser` | Session |
+
+OTP: `lib/otpService.ts` (purpose-scoped, TTL, rate limit, single-use; demo code shown in UI).
 
 ### Notifications
 

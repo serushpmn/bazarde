@@ -15,9 +15,11 @@ import {
 import AdCard from '../components/AdCard';
 import AdImage from '../components/AdImage';
 import { NotificationList } from '../components/NotificationList';
+import { AccountLifecyclePanel } from '../components/AccountLifecyclePanel';
 import { toPersianDigits, getTimeAgo, formatPrice } from '../lib/formatters';
 import { DEFAULT_AVATARS, resolveUserAvatar, isDefaultAvatar } from '../lib/defaultAvatars';
 import { UserAvatar } from '../components/UserAvatar';
+import { getAccountStatus, formatDeletionDate } from '../lib/accountLifecycle';
 import {
   User as UserIcon,
   Bookmark,
@@ -56,7 +58,7 @@ const TAB_IDS: ProfileTab[] = [
 export const Profile: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, login, logout } = useAuth();
+  const { user, login, logout, refreshUser } = useAuth();
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('my_ads');
 
@@ -83,9 +85,6 @@ export const Profile: React.FC = () => {
   const [appealModalAd, setAppealModalAd] = useState<Ad | null>(null);
   const [appealMessage, setAppealMessage] = useState('');
   const [appealError, setAppealError] = useState('');
-
-  // Delete account confirm
-  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
 
   useEffect(() => {
     const tab = searchParams.get('tab') as ProfileTab | null;
@@ -193,6 +192,7 @@ export const Profile: React.FC = () => {
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (getAccountStatus(user) !== 'ACTIVE') return;
     if (!phone.trim()) return;
     const updated: User = {
       ...user,
@@ -207,12 +207,14 @@ export const Profile: React.FC = () => {
     setTimeout(() => setSavedSuccess(false), 2500);
   };
 
-  const handleDeleteAccount = () => {
+  const handleRepublishAd = (adId: string) => {
     if (!user) return;
-    StorageService.deleteUserAccount(user.id);
-    setShowDeleteAccount(false);
-    logout();
-    navigate('/');
+    const res = StorageService.republishPausedAd(adId, user.id);
+    if (!res.ok) {
+      window.alert(res.error || 'انتشار ممکن نیست.');
+      return;
+    }
+    loadData();
   };
 
   const hasPendingAppealForAd = (adId: string) =>
@@ -241,9 +243,40 @@ export const Profile: React.FC = () => {
   }
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
+  const accountStatus = getAccountStatus(user);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      {accountStatus === 'PENDING_DELETION' && (
+        <div className="rounded-3xl border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 p-4 sm:p-5 space-y-2">
+          <p className="text-sm font-bold text-rose-800 dark:text-rose-200">حساب شما در صف حذف است</p>
+          {user.deletionScheduledAt && (
+            <p className="text-xs text-gray-700 dark:text-gray-300">
+              حذف نهایی: {formatDeletionDate(user.deletionScheduledAt)}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => handleTabChange('settings')}
+            className="text-xs font-bold text-primary hover:underline"
+          >
+            مدیریت حذف / بازیابی در تنظیمات
+          </button>
+        </div>
+      )}
+      {accountStatus === 'DEACTIVATED' && (
+        <div className="rounded-3xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-4 sm:p-5">
+          <p className="text-sm font-bold text-amber-900 dark:text-amber-200">حساب موقتاً غیرفعال است</p>
+          <button
+            type="button"
+            onClick={() => handleTabChange('settings')}
+            className="text-xs font-bold text-primary hover:underline mt-1"
+          >
+            فعال‌سازی مجدد از تنظیمات
+          </button>
+        </div>
+      )}
+
       {/* Profile Header Banner */}
       <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 sm:p-8 border border-gray-100 dark:border-gray-800 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -418,6 +451,16 @@ export const Profile: React.FC = () => {
                             <span>حذف‌شده</span>
                           </span>
                         )}
+                        {item.status === AdStatus.PAUSED && (
+                          <span className="px-2 py-0.5 rounded-lg bg-slate-500 text-white text-[10px] font-bold shadow-xs">
+                            متوقف
+                          </span>
+                        )}
+                        {item.status === AdStatus.ARCHIVED_ACCOUNT_DELETION && (
+                          <span className="px-2 py-0.5 rounded-lg bg-rose-400 text-white text-[10px] font-bold shadow-xs">
+                            آرشیو حذف حساب
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -460,7 +503,8 @@ export const Profile: React.FC = () => {
                           <span>مشاهده</span>
                         </Link>
 
-                        {item.status !== AdStatus.REMOVED && (
+                        {item.status !== AdStatus.REMOVED &&
+                          item.status !== AdStatus.ARCHIVED_ACCOUNT_DELETION && (
                           <Link
                             to={`/edit/${item.id}`}
                             className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-primary hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-1"
@@ -468,6 +512,15 @@ export const Profile: React.FC = () => {
                             <Edit2 className="w-3.5 h-3.5" />
                             <span>ویرایش</span>
                           </Link>
+                        )}
+                        {item.status === AdStatus.PAUSED && accountStatus === 'ACTIVE' && (
+                          <button
+                            type="button"
+                            onClick={() => handleRepublishAd(item.id)}
+                            className="px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-bold"
+                          >
+                            انتشار مجدد
+                          </button>
                         )}
                       </div>
 
@@ -646,6 +699,7 @@ export const Profile: React.FC = () => {
       {/* TAB: Settings */}
       {activeTab === 'settings' && (
         <div className="max-w-2xl space-y-4">
+          {accountStatus === 'ACTIVE' && (
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 sm:p-8 border border-gray-100 dark:border-gray-800 shadow-xs space-y-6">
             <div>
               <h3 className="font-black text-sm sm:text-base text-gray-900 dark:text-white">
@@ -788,41 +842,16 @@ export const Profile: React.FC = () => {
               </div>
             </form>
           </div>
+          )}
 
-          {/* Delete account */}
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-rose-100 dark:border-rose-900/40 shadow-xs space-y-3">
-            <h3 className="font-black text-sm text-rose-700 dark:text-rose-300">حذف حساب کاربری</h3>
-            <p className="text-[11px] text-gray-500 leading-relaxed">
-              با حذف حساب، پروفایل، آگهی‌ها و اعلان‌های شما پاک می‌شوند (حق فراموشی مطابق GDPR). این عمل
-              قابل بازگشت نیست.
-            </p>
-            {!showDeleteAccount ? (
-              <button
-                type="button"
-                onClick={() => setShowDeleteAccount(true)}
-                className="px-4 py-2 rounded-xl border border-rose-200 dark:border-rose-800 text-rose-600 text-xs font-bold hover:bg-rose-50 dark:hover:bg-rose-950/30"
-              >
-                درخواست حذف حساب
-              </button>
-            ) : (
-              <div className="flex flex-wrap gap-2 items-center">
-                <button
-                  type="button"
-                  onClick={handleDeleteAccount}
-                  className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700"
-                >
-                  بله، حساب را برای همیشه حذف کن
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteAccount(false)}
-                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-600"
-                >
-                  انصراف
-                </button>
-              </div>
-            )}
-          </div>
+          <AccountLifecyclePanel
+            user={user}
+            onUserUpdated={u => {
+              login(u);
+              refreshUser();
+              loadData();
+            }}
+          />
         </div>
       )}
 

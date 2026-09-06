@@ -12,6 +12,10 @@ Product rules extracted from code. Independent of UI styling.
 4. Creating/editing ads and profile require login (`PrivateRoute`).
 5. Admin panel requires `ADMIN` or `EDITOR` (`AdminRoute`).
 6. Creating an ad requires a non-empty phone on the user account.
+7. Account deletion is self-service with OTP → `PENDING_DELETION` → 30-day grace → anonymization via `processPendingAccountDeletions` (app boot). Restore returns `ACTIVE`; ads stay `PAUSED` until manual republish.
+8. Account pause (`DEACTIVATED`) hides ads without permanent deletion; reactivation does not auto-publish.
+9. Banned/suspended cannot free the phone via deletion; phone restrictions list blocks re-registration.
+10. Max **5** ads in `APPROVED`+`PENDING` per user.
 
 ## GDPR / contact data
 
@@ -19,7 +23,7 @@ Product rules extracted from code. Independent of UI styling.
 2. Ad may expose phone, WhatsApp (same account phone), and/or Telegram username via toggles.
 3. At least one of **show phone** or **show Telegram** (with username) must be enabled on submit. WhatsApp alone is not sufficient.
 4. Violation reports store `reporterUserId`, not separate reporter phone/name.
-5. User may delete account (removes user, their ads, their notifications).
+5. Final deletion anonymizes user PII and strips ad images/contact; user id may remain for referential integrity.
 
 ## Ad publishing
 

@@ -9,7 +9,72 @@ export enum AdStatus {
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
   EXPIRED = 'EXPIRED',
-  REMOVED = 'REMOVED'
+  REMOVED = 'REMOVED',
+  /** Hidden while account paused or after restore — not public until user republishes */
+  PAUSED = 'PAUSED',
+  /** Hidden because account entered pending deletion */
+  ARCHIVED_ACCOUNT_DELETION = 'ARCHIVED_ACCOUNT_DELETION',
+}
+
+/** Account lifecycle (separate from ban/suspension) */
+export type AccountStatus =
+  | 'ACTIVE'
+  | 'PENDING_DELETION'
+  | 'DEACTIVATED'
+  | 'SUSPENDED'
+  | 'BANNED'
+  | 'DELETED'
+  | 'ANONYMIZED';
+
+export type OtpPurpose =
+  | 'account_deletion'
+  | 'change_phone'
+  | 'account_reactivation';
+
+export type AccountDeletionReasonCode =
+  | 'NO_LONGER_NEED'
+  | 'NOT_FOUND_WHAT_LOOKING'
+  | 'BAD_EXPERIENCE'
+  | 'TOO_MANY_NOTIFICATIONS'
+  | 'CREATED_ANOTHER_ACCOUNT'
+  | 'TECHNICAL_PROBLEMS'
+  | 'OTHER'
+  | 'SKIPPED';
+
+export type AccountDeletionRequestStatus = 'PENDING' | 'CANCELLED' | 'COMPLETED' | 'FAILED';
+
+export interface AccountDeletionRequest {
+  id: string;
+  userId: string;
+  requestedAt: number;
+  scheduledFor: number;
+  cancelledAt?: number;
+  completedAt?: number;
+  reason?: AccountDeletionReasonCode;
+  reasonDetails?: string;
+  status: AccountDeletionRequestStatus;
+  createdAt: number;
+}
+
+export interface OtpChallenge {
+  id: string;
+  phone: string;
+  purpose: OtpPurpose;
+  /** Demo SPA: plaintext code; production would store hash only */
+  code: string;
+  expiresAt: number;
+  consumedAt?: number;
+  attempts: number;
+  createdAt: number;
+  userId?: string;
+}
+
+/** Phone numbers that must not register new accounts (e.g. permanent ban) */
+export interface PhoneRestriction {
+  phone: string;
+  reason: 'BANNED' | 'ABUSE' | 'OTHER';
+  createdAt: number;
+  note?: string;
 }
 
 export type ItemCondition = 'NEW' | 'LIKE_NEW' | 'USED' | 'FOR_PARTS';
@@ -70,18 +135,38 @@ export interface Ad {
   viewsCount?: number;
   isVerifiedSeller?: boolean;
   attributes?: Record<string, string>;
+  /** Status before pause / account-deletion archive (for restore → PAUSED) */
+  previousStatus?: AdStatus;
+  archivedAt?: number;
+  deletionReason?: string;
 }
 
 export interface User {
   id: string;
   name: string;
-  /** Primary contact — only essential personal data stored (GDPR minimization) */
+  /** Primary contact — only essential personal data stored (GDPR minimization). Empty after anonymization. */
   phone: string;
   city?: string;
   role: UserRole;
   avatar?: string;
   createdAt?: number;
+  updatedAt?: number;
   savedAdIds?: string[];
+  /** Lifecycle status; missing ⇒ ACTIVE (legacy records) */
+  accountStatus?: AccountStatus;
+  deletionRequestedAt?: number;
+  deletionScheduledAt?: number;
+  deletionCancelledAt?: number;
+  deletedAt?: number;
+  anonymizedAt?: number;
+  deletionReason?: AccountDeletionReasonCode;
+  deletionReasonDetails?: string;
+  deactivatedAt?: number;
+  bannedAt?: number;
+  banReason?: string;
+  suspendedAt?: number;
+  suspensionReason?: string;
+  phoneVerifiedAt?: number;
 }
 
 export interface AppNotification {

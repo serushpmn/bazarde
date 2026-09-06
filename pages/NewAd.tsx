@@ -5,6 +5,7 @@ import { StorageService } from '../services/storage';
 import { Ad, AdStatus, Category, CITIES_DATA, GERMAN_PROVINCES, UserRole } from '../types';
 import { numberToPersianWords } from '../lib/formatters';
 import { CategoryIcon } from '../components/CategoryIcon';
+import { SearchableSelect } from '../components/SearchableSelect';
 import {
   Upload,
   X,
@@ -134,6 +135,17 @@ export const NewAd: React.FC = () => {
   const activeCityData = city ? CITIES_DATA.find(c => c.name === city) : undefined;
   const activeCategoryObj = categories.find(c => c.id === selectedCategory);
 
+  const provinceOptions = GERMAN_PROVINCES.map(p => ({
+    value: p,
+    label: p,
+    keywords: p,
+  }));
+  const cityOptions = citiesInProvince.map(c => ({
+    value: c.name,
+    label: c.name,
+    keywords: `${c.germanName} ${c.province}`,
+  }));
+
   const handleProvinceChange = (nextProvince: string) => {
     setProvince(nextProvince);
     setCity('');
@@ -216,6 +228,14 @@ export const NewAd: React.FC = () => {
     if (!userPhone) {
       setErrorMsg('شماره موبایل در حساب کاربری شما ثبت نشده است. لطفاً ابتدا در تنظیمات حساب، شماره تماس خود را وارد کنید.');
       return;
+    }
+
+    if (!isEditMode) {
+      const limit = StorageService.canCreateAd(user.id);
+      if (!limit.ok) {
+        setErrorMsg(limit.reason || 'امکان ثبت آگهی نیست.');
+        return;
+      }
     }
 
     if (!title.trim()) {
@@ -486,38 +506,31 @@ export const NewAd: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] text-gray-500 mb-1">ایالت (Bundesland) *</label>
-                <select
+                <SearchableSelect
+                  options={provinceOptions}
                   value={province}
-                  onChange={e => handleProvinceChange(e.target.value)}
-                  className="w-full p-2.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-semibold outline-none focus:border-primary"
-                  required
-                >
-                  <option value="">انتخاب ایالت...</option>
-                  {GERMAN_PROVINCES.map(p => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
+                  onChange={handleProvinceChange}
+                  placeholder="جستجو یا انتخاب ایالت..."
+                  searchPlaceholder="جستجوی ایالت..."
+                  emptyLabel="ایالتی یافت نشد"
+                />
               </div>
 
               <div>
                 <label className="block text-[11px] text-gray-500 mb-1">شهر (اختیاری)</label>
-                <select
+                <SearchableSelect
+                  options={cityOptions}
                   value={city}
-                  onChange={e => handleCityChange(e.target.value)}
+                  onChange={handleCityChange}
                   disabled={!province}
-                  className="w-full p-2.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-semibold outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option value="">
-                    {province ? 'شهر در لیست نیست — فقط ایالت' : 'ابتدا ایالت را انتخاب کنید'}
-                  </option>
-                  {citiesInProvince.map(c => (
-                    <option key={c.name} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  allowEmpty
+                  emptyOptionLabel={
+                    province ? 'شهر در لیست نیست — فقط ایالت' : 'ابتدا ایالت را انتخاب کنید'
+                  }
+                  placeholder="جستجو یا انتخاب شهر..."
+                  searchPlaceholder="جستجوی شهر (فارسی یا آلمانی)..."
+                  emptyLabel="شهری یافت نشد"
+                />
               </div>
             </div>
 

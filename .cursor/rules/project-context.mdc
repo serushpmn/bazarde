@@ -5,9 +5,10 @@ alwaysApply: true
 
 # Bazaar AI context
 
-- This is a **client-only** React/Vite classifieds SPA. Persistence is **localStorage** via `services/storage.ts`.
+- Persistence is **localStorage** via `services/storage.ts`, with optional **PostgreSQL** sync through `server/` API (`docs/POSTGRES.md`).
 - Do **not** read the entire repo by default. Start with `AGENTS.md` + `docs/PROJECT_MAP.md`, then the relevant module README under `pages/`, `components/`, `services/`, or `lib/`.
-- Do not invent HTTP APIs or SQL schemas. Treat `StorageService` as the app API (`docs/API.md`).
+- Do not invent HTTP APIs or SQL schemas casually; extend `server/src/schema.sql` + `StorageService` together when persisting new domain fields.
+- Treat `StorageService` as the app API (`docs/API.md`); Postgres routes mirror that surface.
 - UI is **Persian RTL**. Prefer minimal diffs; run `npm run build` after meaningful changes.
 - Unused scaffolding: Supabase/`ImageService`, `@google/genai`, in-app chat APIs, `SellerCard` (not on AdDetails).
 - Update `docs/*` only when architecture, storage API, routes, or business rules change.

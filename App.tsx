@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole } from './types';
 import { StorageService } from './services/storage';
+import { getAccountStatus } from './lib/accountLifecycle';
 
 // Pages
 import Home from './pages/Home';
@@ -57,6 +58,7 @@ interface AuthContextType {
   user: User | null;
   login: (user: User) => void;
   logout: () => void;
+  refreshUser: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>(null!);
@@ -66,13 +68,25 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    StorageService.processExpiredAds();
+    StorageService.processPendingAccountDeletions();
     const storedUser = StorageService.getCurrentUser();
-    if (storedUser) setUser(storedUser);
+    if (storedUser) {
+      const fresh = StorageService.getUserById(storedUser.id);
+      if (fresh) {
+        setUser(fresh);
+        StorageService.setCurrentUser(fresh);
+      } else {
+        setUser(null);
+        StorageService.setCurrentUser(null);
+      }
+    }
   }, []);
 
   const login = (userData: User) => {
-    setUser(userData);
-    StorageService.setCurrentUser(userData);
+    const fresh = StorageService.getUserById(userData.id) || userData;
+    setUser(fresh);
+    StorageService.setCurrentUser(fresh);
   };
 
   const logout = () => {
@@ -80,8 +94,24 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     StorageService.setCurrentUser(null);
   };
 
+  const refreshUser = () => {
+    const current = StorageService.getCurrentUser();
+    if (!current) {
+      setUser(null);
+      return;
+    }
+    const fresh = StorageService.getUserById(current.id);
+    if (fresh) {
+      setUser(fresh);
+      StorageService.setCurrentUser(fresh);
+    } else {
+      setUser(null);
+      StorageService.setCurrentUser(null);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
@@ -133,6 +163,16 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   return user ? <>{children}</> : <Navigate to="/login" />;
 };
 
+/** Requires ACTIVE account (blocks pending deletion / deactivated / banned from posting) */
+const ActiveAccountRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" />;
+  if (getAccountStatus(user) !== 'ACTIVE') {
+    return <Navigate to="/profile?tab=settings" replace />;
+  }
+  return <>{children}</>;
+};
+
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const canAccess = user && (user.role === UserRole.ADMIN || user.role === UserRole.EDITOR);
@@ -143,9 +183,34 @@ export default function App() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    StorageService.processExpiredAds();
-    const timer = window.setTimeout(() => setIsReady(true), 400);
-    return () => window.clearTimeout(timer);
+    let cancelled = false;
+    let timer: number | undefined;
+
+    (async () => {
+      StorageService.processExpiredAds();
+      StorageService.processPendingAccountDeletions();
+      try {
+        const { isPostgresApiEnabled, pullFromPostgres } = await import('./services/postgresSync');
+        if (isPostgresApiEnabled()) {
+          const result = await pullFromPostgres();
+          if (!result.ok) {
+            console.warn('[postgres] pull failed, using localStorage:', result.error);
+          } else {
+            console.info('[postgres] bootstrap pulled into localStorage');
+          }
+        }
+      } catch (e) {
+        console.warn('[postgres] sync unavailable', e);
+      }
+      if (!cancelled) {
+        timer = window.setTimeout(() => setIsReady(true), 200);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
   }, []);
 
   if (!isReady) {
@@ -173,17 +238,23 @@ export default function App() {
                 {/* Support both /new and /new-ad routes */}
                 <Route path="/new-ad" element={
                   <PrivateRoute>
-                    <NewAd />
+                    <ActiveAccountRoute>
+                      <NewAd />
+                    </ActiveAccountRoute>
                   </PrivateRoute>
                 } />
                 <Route path="/new" element={
                   <PrivateRoute>
-                    <NewAd />
+                    <ActiveAccountRoute>
+                      <NewAd />
+                    </ActiveAccountRoute>
                   </PrivateRoute>
                 } />
                 <Route path="/edit/:id" element={
                   <PrivateRoute>
-                    <NewAd />
+                    <ActiveAccountRoute>
+                      <NewAd />
+                    </ActiveAccountRoute>
                   </PrivateRoute>
                 } />
                 
