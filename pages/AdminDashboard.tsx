@@ -13,6 +13,9 @@ import {
   ViolationReport,
   Appeal,
   ActivityLog,
+  ManagedCity,
+  CITIES_DATA,
+  GERMAN_PROVINCES,
 } from '../types';
 import { CategoryIcon } from '../components/CategoryIcon';
 import AdImage from '../components/AdImage';
@@ -50,6 +53,8 @@ import {
   Settings2,
   Scale,
   ScrollText,
+  Power,
+  Save,
 } from 'lucide-react';
 
 type AdminTab = 'ads' | 'reports' | 'appeals' | 'settings' | 'logs' | 'categories' | 'cities' | 'support' | 'banners' | 'users';
@@ -73,6 +78,7 @@ export const AdminDashboard: React.FC = () => {
   const [reports, setReports] = useState<ViolationReport[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [cities, setCities] = useState<string[]>([]);
+  const [cityRecords, setCityRecords] = useState<ManagedCity[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -111,9 +117,14 @@ export const AdminDashboard: React.FC = () => {
   const [selectedCatForSub, setSelectedCatForSub] = useState<string>('');
   const [newSubName, setNewSubName] = useState('');
   const [newSubSlug, setNewSubSlug] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editCatName, setEditCatName] = useState('');
+  const [editCatIcon, setEditCatIcon] = useState('Layers');
 
   // City Form
   const [newCityName, setNewCityName] = useState('');
+  const [editingCityName, setEditingCityName] = useState<string | null>(null);
+  const [editCityValue, setEditCityValue] = useState('');
 
   // Support Reply Form
   const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
@@ -122,16 +133,21 @@ export const AdminDashboard: React.FC = () => {
   const [newBannerImg, setNewBannerImg] = useState('');
   const [newBannerTitle, setNewBannerTitle] = useState('');
   const [newBannerLink, setNewBannerLink] = useState('');
+  const [editingBannerId, setEditingBannerId] = useState<string | null>(null);
+  const [editBannerTitle, setEditBannerTitle] = useState('');
+  const [editBannerImg, setEditBannerImg] = useState('');
+  const [editBannerLink, setEditBannerLink] = useState('');
 
   const loadAll = () => {
     StorageService.processExpiredAds();
     setAds(StorageService.getAds());
     setReports(StorageService.getViolationReports());
-    setCategories(StorageService.getCategories());
-    setCities(StorageService.getCities());
+    setCategories(StorageService.getCategories({ includeInactive: true }));
+    setCities(StorageService.getCities({ includeInactive: true }));
+    setCityRecords(StorageService.getCityRecords());
     setUsers(StorageService.getUsers());
     setSupportMessages(StorageService.getSupportMessages());
-    setBanners(StorageService.getBanners());
+    setBanners(StorageService.getBanners({ includeInactive: true }));
     setAppeals(StorageService.getAppeals());
     setActivityLogs(StorageService.getActivityLogs());
   };
@@ -249,7 +265,8 @@ export const AdminDashboard: React.FC = () => {
       name: newCatName.trim(),
       slug: catId,
       icon: newCatIcon,
-      subcategories: []
+      subcategories: [],
+      isActive: true,
     };
     StorageService.saveCategory(newCategory);
     setNewCatName('');
@@ -282,6 +299,33 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const startEditCategory = (cat: Category) => {
+    setEditingCategoryId(cat.id);
+    setEditCatName(cat.name);
+    setEditCatIcon(cat.icon || 'Layers');
+  };
+
+  const handleSaveCategoryEdit = () => {
+    if (!editingCategoryId || !editCatName.trim()) return;
+    const cat = categories.find(c => c.id === editingCategoryId);
+    if (!cat) return;
+    StorageService.saveCategory({
+      ...cat,
+      name: editCatName.trim(),
+      icon: editCatIcon.trim() || cat.icon,
+    });
+    setEditingCategoryId(null);
+    loadAll();
+  };
+
+  const handleToggleCategoryActive = (cat: Category) => {
+    StorageService.saveCategory({
+      ...cat,
+      isActive: cat.isActive === false,
+    });
+    loadAll();
+  };
+
   // City Actions
   const handleAddCity = (e: React.FormEvent) => {
     e.preventDefault();
@@ -294,6 +338,36 @@ export const AdminDashboard: React.FC = () => {
   const handleDeleteCity = (cityName: string) => {
     if (window.confirm(`آیا از حذف شهر/ایالت ${cityName} اطمینان دارید؟`)) {
       StorageService.removeCity(cityName);
+      if (editingCityName === cityName) setEditingCityName(null);
+      loadAll();
+    }
+  };
+
+  const startEditCity = (cityName: string) => {
+    setEditingCityName(cityName);
+    setEditCityValue(cityName);
+  };
+
+  const handleSaveCityEdit = () => {
+    if (!editingCityName || !editCityValue.trim()) return;
+    StorageService.updateCity(editingCityName, { name: editCityValue.trim() });
+    setEditingCityName(null);
+    loadAll();
+  };
+
+  const handleToggleCityActive = (city: ManagedCity) => {
+    StorageService.updateCity(city.name, { isActive: city.isActive === false });
+    loadAll();
+  };
+
+  const handleResetCities = () => {
+    if (
+      window.confirm(
+        'فهرست شهرها و ایالت‌ها به پیش‌فرض کامل ۱۶ ایالت آلمان بازنشانی می‌شود. ادامه می‌دهید؟'
+      )
+    ) {
+      StorageService.resetCitiesToDefaults();
+      setEditingCityName(null);
       loadAll();
     }
   };
@@ -317,7 +391,8 @@ export const AdminDashboard: React.FC = () => {
       title: newBannerTitle.trim(),
       link: newBannerLink.trim() || '/',
       position: 'HOME_TOP',
-      altText: newBannerTitle.trim()
+      altText: newBannerTitle.trim(),
+      isActive: true,
     };
     StorageService.saveBanner(newBanner);
     setNewBannerImg('');
@@ -328,6 +403,37 @@ export const AdminDashboard: React.FC = () => {
 
   const handleDeleteBanner = (bannerId: string) => {
     StorageService.deleteBanner(bannerId);
+    if (editingBannerId === bannerId) setEditingBannerId(null);
+    loadAll();
+  };
+
+  const startEditBanner = (banner: Banner) => {
+    setEditingBannerId(banner.id);
+    setEditBannerTitle(banner.title || '');
+    setEditBannerImg(banner.imageUrl);
+    setEditBannerLink(banner.link || '');
+  };
+
+  const handleSaveBannerEdit = () => {
+    if (!editingBannerId || !editBannerTitle.trim() || !editBannerImg.trim()) return;
+    const existing = banners.find(b => b.id === editingBannerId);
+    if (!existing) return;
+    StorageService.saveBanner({
+      ...existing,
+      title: editBannerTitle.trim(),
+      imageUrl: editBannerImg.trim(),
+      link: editBannerLink.trim() || '/',
+      altText: editBannerTitle.trim(),
+    });
+    setEditingBannerId(null);
+    loadAll();
+  };
+
+  const handleToggleBannerActive = (banner: Banner) => {
+    StorageService.saveBanner({
+      ...banner,
+      isActive: banner.isActive === false,
+    });
     loadAll();
   };
 
@@ -382,18 +488,18 @@ export const AdminDashboard: React.FC = () => {
         </button>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-gray-200 dark:border-gray-800">
+      {/* Tabs Navigation — wrap so all tabs stay visible */}
+      <div className="flex flex-wrap items-center gap-2 pb-1 border-b border-gray-200 dark:border-gray-800">
         {[
           { id: 'ads', label: 'نظارت بر آگهی‌ها', count: pendingAdsCount, icon: SlidersHorizontal },
-          { id: 'reports', label: 'گزارش‌های تخلف (DSA)', count: pendingReportsCount, icon: Flag, isWarning: true },
+          { id: 'reports', label: 'گزارش‌های تخلف', count: pendingReportsCount, icon: Flag, isWarning: true },
           { id: 'appeals', label: 'اعتراض‌ها', count: pendingAppealsCount, icon: Scale, isWarning: true },
-          { id: 'settings', label: 'تنظیمات و قوانین', icon: Settings2 },
-          { id: 'logs', label: 'لاگ فعالیت', icon: ScrollText },
+          { id: 'settings', label: 'تنظیمات', icon: Settings2 },
+          { id: 'logs', label: 'لاگ', icon: ScrollText },
           { id: 'categories', label: 'دسته‌بندی‌ها', icon: Layers },
-          { id: 'cities', label: 'ایالت‌ها و شهرها', icon: MapPin },
-          { id: 'support', label: 'پیام‌های پشتیبانی', count: unrepliedSupportCount, icon: MessageSquare },
-          { id: 'banners', label: 'بنرهای تبلیغاتی', icon: ImageIcon },
+          { id: 'cities', label: 'شهرها', icon: MapPin },
+          { id: 'support', label: 'پشتیبانی', count: unrepliedSupportCount, icon: MessageSquare },
+          { id: 'banners', label: 'بنرها', icon: ImageIcon },
           { id: 'users', label: 'کاربران', icon: Users }
         ].map(tab => {
           const Icon = tab.icon;
@@ -402,13 +508,13 @@ export const AdminDashboard: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id as any)}
-              className={`px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
+              className={`px-3 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap ${
                 isActive
                   ? 'bg-primary text-white shadow-md'
                   : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-100 dark:border-gray-800'
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="w-3.5 h-3.5" />
               <span>{tab.label}</span>
               {typeof tab.count === 'number' && tab.count > 0 && (
                 <span
@@ -868,28 +974,86 @@ export const AdminDashboard: React.FC = () => {
           <div className="lg:col-span-2 space-y-4">
             <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
               <h3 className="font-bold text-sm text-gray-900 dark:text-white">
-                دسته‌بندی‌های فعال ({categories.length})
+                دسته‌بندی‌ها ({toPersianDigits(categories.length)})
               </h3>
 
               <div className="space-y-3">
-                {categories.map(cat => (
+                {categories.map(cat => {
+                  const inactive = cat.isActive === false;
+                  const isEditing = editingCategoryId === cat.id;
+                  return (
                   <div
                     key={cat.id}
-                    className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 space-y-2"
+                    className={`p-4 rounded-2xl border space-y-2 ${
+                      inactive
+                        ? 'bg-gray-100/80 dark:bg-gray-800/40 border-dashed border-gray-300 dark:border-gray-700 opacity-80'
+                        : 'bg-gray-50 dark:bg-gray-800/60 border-gray-100 dark:border-gray-800'
+                    }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <CategoryIcon name={cat.icon} className="w-5 h-5 text-primary" />
-                        <span className="font-bold text-xs text-gray-900 dark:text-white">{cat.name}</span>
-                        <span className="text-[10px] text-gray-400 font-mono">({cat.id})</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <CategoryIcon name={cat.icon} className="w-5 h-5 text-primary shrink-0" />
+                        {isEditing ? (
+                          <div className="flex flex-wrap items-center gap-2 flex-1">
+                            <input
+                              type="text"
+                              value={editCatName}
+                              onChange={e => setEditCatName(e.target.value)}
+                              className="flex-1 min-w-[120px] p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs"
+                            />
+                            <input
+                              type="text"
+                              value={editCatIcon}
+                              onChange={e => setEditCatIcon(e.target.value)}
+                              placeholder="آیکون (مثلاً Home)"
+                              className="w-28 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-[11px] font-mono dir-ltr"
+                            />
+                            <button type="button" onClick={handleSaveCategoryEdit} className="p-2 rounded-lg bg-primary text-white" title="ذخیره">
+                              <Save className="w-3.5 h-3.5" />
+                            </button>
+                            <button type="button" onClick={() => setEditingCategoryId(null)} className="p-2 rounded-lg text-gray-500 hover:bg-gray-200" title="انصراف">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="font-bold text-xs text-gray-900 dark:text-white truncate">{cat.name}</span>
+                            <span className="text-[10px] text-gray-400 font-mono shrink-0">({cat.id})</span>
+                            {inactive && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 shrink-0">غیرفعال</span>
+                            )}
+                          </>
+                        )}
                       </div>
 
-                      <button
-                        onClick={() => handleDeleteCategory(cat.id)}
-                        className="text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg text-xs"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {!isEditing && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => startEditCategory(cat)}
+                            className="text-primary hover:bg-red-50 dark:hover:bg-red-950/30 p-1.5 rounded-lg"
+                            title="ویرایش"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCategoryActive(cat)}
+                            className={`p-1.5 rounded-lg ${inactive ? 'text-emerald-600 hover:bg-emerald-50' : 'text-amber-600 hover:bg-amber-50'}`}
+                            title={inactive ? 'فعال‌سازی' : 'غیرفعال‌سازی'}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            className="text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg"
+                            title="حذف"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {cat.subcategories && cat.subcategories.length > 0 && (
@@ -905,7 +1069,8 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -915,12 +1080,12 @@ export const AdminDashboard: React.FC = () => {
       {/* 4. CITIES TAB */}
       {activeTab === 'cities' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
-            <h3 className="font-bold text-sm text-gray-900 dark:text-white">افزودن شهر یا ایالت آلمان</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 border border-gray-100 dark:border-gray-800 shadow-xs space-y-4 h-fit">
+            <h3 className="font-bold text-sm text-gray-900 dark:text-white">افزودن شهر</h3>
             <form onSubmit={handleAddCity} className="space-y-3">
               <input
                 type="text"
-                placeholder="مثلاً: برمن (Bremen)"
+                placeholder="مثلاً: آخن (Aachen)"
                 value={newCityName}
                 onChange={e => setNewCityName(e.target.value)}
                 className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs outline-none"
@@ -934,28 +1099,164 @@ export const AdminDashboard: React.FC = () => {
                 <span>ثبت شهر</span>
               </button>
             </form>
+            <button
+              type="button"
+              onClick={handleResetCities}
+              className="w-full py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-gray-200 dark:hover:bg-gray-700"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>بازنشانی به ۱۶ ایالت پیش‌فرض</span>
+            </button>
+            <p className="text-[10px] text-gray-400 leading-relaxed">
+              شهرها بر اساس ۱۶ ایالت فدرال آلمان گروه‌بندی شده‌اند. غیرفعال‌سازی شهر را از لیست عمومی حذف می‌کند.
+            </p>
           </div>
 
-          <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-3xl p-5 border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
+          <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-3xl p-5 border border-gray-100 dark:border-gray-800 shadow-xs space-y-5">
             <h3 className="font-bold text-sm text-gray-900 dark:text-white">
-              شهرهای تحت پوشش در آلمان ({cities.length})
+              شهرها و ایالت‌ها ({toPersianDigits(cityRecords.length)})
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {cities.map(cityName => (
-                <div
-                  key={cityName}
-                  className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-between text-xs"
-                >
-                  <span className="font-medium text-gray-800 dark:text-gray-200 truncate">{cityName}</span>
-                  <button
-                    onClick={() => handleDeleteCity(cityName)}
-                    className="text-gray-400 hover:text-rose-500 p-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+            {GERMAN_PROVINCES.map(province => {
+              const provinceCities = cityRecords.filter(rec => {
+                const meta = CITIES_DATA.find(c => c.name === rec.name);
+                return meta?.province === province;
+              });
+              if (provinceCities.length === 0) return null;
+              return (
+                <div key={province} className="space-y-2">
+                  <h4 className="text-[11px] font-bold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800 pb-1.5">
+                    {province}
+                    <span className="font-medium text-gray-400 mr-1">
+                      ({toPersianDigits(provinceCities.length)})
+                    </span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {provinceCities.map(city => {
+                      const inactive = city.isActive === false;
+                      const isEditing = editingCityName === city.name;
+                      return (
+                        <div
+                          key={city.name}
+                          className={`p-3 rounded-xl border flex items-center justify-between gap-2 text-xs ${
+                            inactive
+                              ? 'bg-gray-100/80 dark:bg-gray-800/40 border-dashed border-gray-300 dark:border-gray-700'
+                              : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                          }`}
+                        >
+                          {isEditing ? (
+                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                              <input
+                                type="text"
+                                value={editCityValue}
+                                onChange={e => setEditCityValue(e.target.value)}
+                                className="flex-1 min-w-0 p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs"
+                              />
+                              <button type="button" onClick={handleSaveCityEdit} className="p-1.5 rounded-lg bg-primary text-white shrink-0">
+                                <Save className="w-3.5 h-3.5" />
+                              </button>
+                              <button type="button" onClick={() => setEditingCityName(null)} className="p-1.5 text-gray-500 shrink-0">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="min-w-0 flex-1">
+                                <span className="font-medium text-gray-800 dark:text-gray-200 block truncate">{city.name}</span>
+                                {inactive && <span className="text-[10px] text-gray-500">غیرفعال</span>}
+                              </div>
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                <button type="button" onClick={() => startEditCity(city.name)} className="text-primary hover:bg-red-50 p-1 rounded-lg" title="ویرایش">
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleCityActive(city)}
+                                  className={`p-1 rounded-lg ${inactive ? 'text-emerald-600' : 'text-amber-600'}`}
+                                  title={inactive ? 'فعال‌سازی' : 'غیرفعال‌سازی'}
+                                >
+                                  <Power className="w-3.5 h-3.5" />
+                                </button>
+                                <button type="button" onClick={() => handleDeleteCity(city.name)} className="text-gray-400 hover:text-rose-500 p-1" title="حذف">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
+            {(() => {
+              const known = new Set(CITIES_DATA.map(c => c.name));
+              const orphans = cityRecords.filter(c => !known.has(c.name));
+              if (orphans.length === 0) return null;
+              return (
+                <div className="space-y-2">
+                  <h4 className="text-[11px] font-bold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800 pb-1.5">
+                    سایر شهرهای اضافه‌شده
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {orphans.map(city => {
+                      const inactive = city.isActive === false;
+                      const isEditing = editingCityName === city.name;
+                      return (
+                        <div
+                          key={city.name}
+                          className={`p-3 rounded-xl border flex items-center justify-between gap-2 text-xs ${
+                            inactive
+                              ? 'bg-gray-100/80 dark:bg-gray-800/40 border-dashed border-gray-300 dark:border-gray-700'
+                              : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                          }`}
+                        >
+                          {isEditing ? (
+                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                              <input
+                                type="text"
+                                value={editCityValue}
+                                onChange={e => setEditCityValue(e.target.value)}
+                                className="flex-1 min-w-0 p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs"
+                              />
+                              <button type="button" onClick={handleSaveCityEdit} className="p-1.5 rounded-lg bg-primary text-white shrink-0">
+                                <Save className="w-3.5 h-3.5" />
+                              </button>
+                              <button type="button" onClick={() => setEditingCityName(null)} className="p-1.5 text-gray-500 shrink-0">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="min-w-0 flex-1">
+                                <span className="font-medium text-gray-800 dark:text-gray-200 block truncate">{city.name}</span>
+                                {inactive && <span className="text-[10px] text-gray-500">غیرفعال</span>}
+                              </div>
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                <button type="button" onClick={() => startEditCity(city.name)} className="text-primary hover:bg-red-50 p-1 rounded-lg" title="ویرایش">
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleCityActive(city)}
+                                  className={`p-1 rounded-lg ${inactive ? 'text-emerald-600' : 'text-amber-600'}`}
+                                  title={inactive ? 'فعال‌سازی' : 'غیرفعال‌سازی'}
+                                >
+                                  <Power className="w-3.5 h-3.5" />
+                                </button>
+                                <button type="button" onClick={() => handleDeleteCity(city.name)} className="text-gray-400 hover:text-rose-500 p-1" title="حذف">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -1052,28 +1353,85 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="lg:col-span-2 space-y-3">
-            {banners.map(banner => (
-              <div
-                key={banner.id}
-                className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 flex items-center gap-4"
-              >
-                <img
-                  src={banner.imageUrl}
-                  alt={banner.title}
-                  className="w-24 h-16 rounded-xl object-cover flex-shrink-0"
-                />
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">{banner.title}</h4>
-                  <span className="text-[10px] text-gray-400 dir-ltr block truncate">{banner.link}</span>
-                </div>
-                <button
-                  onClick={() => handleDeleteBanner(banner.id)}
-                  className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl"
+            {banners.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-8">بنری ثبت نشده است.</p>
+            ) : (
+              banners.map(banner => {
+                const inactive = banner.isActive === false;
+                const isEditing = editingBannerId === banner.id;
+                return (
+                <div
+                  key={banner.id}
+                  className={`bg-white dark:bg-gray-900 rounded-2xl p-4 border flex flex-col sm:flex-row sm:items-center gap-4 ${
+                    inactive ? 'border-dashed border-gray-300 opacity-80' : 'border-gray-100 dark:border-gray-800'
+                  }`}
                 >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
+                  <img
+                    src={banner.imageUrl}
+                    alt={banner.title}
+                    className="w-full sm:w-24 h-16 rounded-xl object-cover flex-shrink-0"
+                  />
+                  {isEditing ? (
+                    <div className="flex-1 space-y-2 min-w-0">
+                      <input
+                        type="text"
+                        value={editBannerTitle}
+                        onChange={e => setEditBannerTitle(e.target.value)}
+                        placeholder="عنوان"
+                        className="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent text-xs"
+                      />
+                      <input
+                        type="url"
+                        value={editBannerImg}
+                        onChange={e => setEditBannerImg(e.target.value)}
+                        placeholder="URL تصویر"
+                        className="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent text-xs dir-ltr"
+                      />
+                      <input
+                        type="text"
+                        value={editBannerLink}
+                        onChange={e => setEditBannerLink(e.target.value)}
+                        placeholder="لینک مقصد"
+                        className="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent text-xs dir-ltr"
+                      />
+                      <div className="flex gap-2">
+                        <button type="button" onClick={handleSaveBannerEdit} className="px-3 py-1.5 rounded-lg bg-primary text-white text-[11px] font-bold flex items-center gap-1">
+                          <Save className="w-3.5 h-3.5" /> ذخیره
+                        </button>
+                        <button type="button" onClick={() => setEditingBannerId(null)} className="px-3 py-1.5 rounded-lg text-[11px] text-gray-500 hover:bg-gray-100">
+                          انصراف
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">{banner.title}</h4>
+                        <span className="text-[10px] text-gray-400 dir-ltr block truncate">{banner.link}</span>
+                        {inactive && <span className="text-[10px] text-amber-600 font-bold">غیرفعال</span>}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button type="button" onClick={() => startEditBanner(banner)} className="p-2 text-primary hover:bg-red-50 rounded-xl" title="ویرایش">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBannerActive(banner)}
+                          className={`p-2 rounded-xl ${inactive ? 'text-emerald-600 hover:bg-emerald-50' : 'text-amber-600 hover:bg-amber-50'}`}
+                          title={inactive ? 'فعال‌سازی' : 'غیرفعال‌سازی'}
+                        >
+                          <Power className="w-4 h-4" />
+                        </button>
+                        <button type="button" onClick={() => handleDeleteBanner(banner.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl" title="حذف">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}

@@ -18,6 +18,7 @@ export interface SubCategory {
   id: string;
   name: string;
   slug: string;
+  isActive?: boolean;
 }
 
 export interface Category {
@@ -26,6 +27,8 @@ export interface Category {
   slug: string;
   icon: string; // Lucide icon name
   subcategories: SubCategory[];
+  /** When false, hidden from public listing/new-ad. Default true. */
+  isActive?: boolean;
 }
 
 export interface AdAttribute {
@@ -166,6 +169,14 @@ export interface Banner {
   link?: string;
   position: 'HOME_TOP' | 'HOME_MIDDLE' | 'SIDEBAR';
   altText?: string;
+  /** When false, hidden from home slider. Default true. */
+  isActive?: boolean;
+}
+
+/** City/state entry managed in admin (supports rename + disable) */
+export interface ManagedCity {
+  name: string;
+  isActive?: boolean;
 }
 
 export interface ChatMessage {
@@ -185,154 +196,228 @@ export interface CityData {
   popularDistricts: string[];
 }
 
+const PROVINCES = {
+  BW: 'بادن-وورتمبرگ (Baden-Württemberg)',
+  BY: 'بایرن (Bayern / Bavaria)',
+  BE: 'برلین (Berlin)',
+  BB: 'براندنبورگ (Brandenburg)',
+  HB: 'برمن (Bremen)',
+  HH: 'هامبورگ (Hamburg)',
+  HE: 'هسن (Hessen)',
+  MV: 'مکلنبورگ-فورپومرن (Mecklenburg-Vorpommern)',
+  NI: 'نیدرزاکسن (Niedersachsen / Lower Saxony)',
+  NW: 'نوردراین-وستفالن (Nordrhein-Westfalen / NRW)',
+  RP: 'راینلاند-فالتس (Rheinland-Pfalz)',
+  SL: 'زارلاند (Saarland)',
+  SN: 'زاکسن (Sachsen / Saxony)',
+  ST: 'زاکسن-آنهالت (Sachsen-Anhalt)',
+  SH: 'شلسویگ-هولشتاین (Schleswig-Holstein)',
+  TH: 'تورینگن (Thüringen)',
+} as const;
+
+const city = (
+  persian: string,
+  german: string,
+  province: string,
+  popularDistricts: string[] = []
+): CityData => ({
+  name: `${persian} (${german})`,
+  germanName: german,
+  province,
+  popularDistricts,
+});
+
+/** ۱۶ ایالت آلمان + شهرهای اصلی (و مناطق مهم برلین/هامبورگ) */
 export const CITIES_DATA: CityData[] = [
-  {
-    name: 'برلین (Berlin)',
-    germanName: 'Berlin',
-    province: 'برلین (Berlin)',
-    popularDistricts: ['Mitte', 'Charlottenburg', 'Kreuzberg', 'Neukölln', 'Prenzlauer Berg', 'Friedrichshain', 'Schöneberg', 'Steglitz', 'Spandau', 'Pankow']
-  },
-  {
-    name: 'مونیخ (München)',
-    germanName: 'München',
-    province: 'بایرن (Bayern)',
-    popularDistricts: ['Schwabing', 'Maxvorstadt', 'Sendling', 'Bogenhausen', 'Neuhausen', 'Haidhausen', 'Giesing', 'Pasing']
-  },
-  {
-    name: 'فرانکفورت (Frankfurt)',
-    germanName: 'Frankfurt am Main',
-    province: 'هسن (Hessen)',
-    popularDistricts: ['Innenstadt', 'Westend', 'Nordend', 'Sachsenhausen', 'Bornheim', 'Bockenheim', 'Gallus', 'Höchst']
-  },
-  {
-    name: 'کلن (Köln)',
-    germanName: 'Köln',
-    province: 'نوردراین-وستفالن (NRW)',
-    popularDistricts: ['Altstadt', 'Ehrenfeld', 'Nippes', 'Lindenthal', 'Sülz', 'Deutz', 'Mülheim', 'Rodenkirchen']
-  },
-  {
-    name: 'هامبورگ (Hamburg)',
-    germanName: 'Hamburg',
-    province: 'هامبورگ (Hamburg)',
-    popularDistricts: ['Altona', 'Eimsbüttel', 'Wandsbek', 'Hamburg-Nord', 'St. Pauli', 'Winterhude', 'Harburg', 'Bergedorf']
-  },
-  {
-    name: 'دوسلدورف (Düsseldorf)',
-    germanName: 'Düsseldorf',
-    province: 'نوردراین-وستفالن (NRW)',
-    popularDistricts: ['Altstadt', 'Stadtmitte', 'Pempelfort', 'Bilk', 'Oberkassel', 'Derendorf', 'Flingern', 'Benrath']
-  },
-  {
-    name: 'اشتوتگارت (Stuttgart)',
-    germanName: 'Stuttgart',
-    province: 'بادن-وورتمبرگ (Baden-Württemberg)',
-    popularDistricts: ['Stuttgart-Mitte', 'Stuttgart-West', 'Stuttgart-Süd', 'Bad Cannstatt', 'Degerloch', 'Vaihingen', 'Zuffenhausen']
-  },
-  {
-    name: 'هانوفر (Hannover)',
-    germanName: 'Hannover',
-    province: 'نیدرزاکسن (Niedersachsen)',
-    popularDistricts: ['Mitte', 'List', 'Linden', 'Nordstadt', 'Südstadt', 'Döhren', 'Herrenhausen']
-  },
-  {
-    name: 'نورنبرگ (Nürnberg)',
-    germanName: 'Nürnberg',
-    province: 'بایرن (Bayern)',
-    popularDistricts: ['Mitte', 'Gostenhof', 'St. Johannis', 'Erlenstegen', 'Mögeldorf', 'Langwasser']
-  },
-  {
-    name: 'لایپزیگ (Leipzig)',
-    germanName: 'Leipzig',
-    province: 'زاکسن (Sachsen)',
-    popularDistricts: ['Zentrum', 'Plagwitz', 'Connewitz', 'Südvorstadt', 'Gohlis', 'Reudnitz']
-  },
-  {
-    name: 'دورتموند (Dortmund)',
-    germanName: 'Dortmund',
-    province: 'نوردراین-وستفالن (NRW)',
-    popularDistricts: ['Innenstadt-West', 'Innenstadt-Ost', 'Hörde', 'Hombruch', 'Aplerbeck']
-  },
-  {
-    name: 'اسن (Essen)',
-    germanName: 'Essen',
-    province: 'نوردراین-وستفالن (NRW)',
-    popularDistricts: ['Stadtkern', 'Rüttenscheid', 'Holsterhausen', 'Bredeney', 'Werden']
-  },
-  {
-    name: 'برمن (Bremen)',
-    germanName: 'Bremen',
-    province: 'برمن (Bremen)',
-    popularDistricts: ['Mitte', 'Neustadt', 'Findorff', 'Schwachhausen', 'Östliche Vorstadt']
-  },
-  {
-    name: 'درسدن (Dresden)',
-    germanName: 'Dresden',
-    province: 'زاکسن (Sachsen)',
-    popularDistricts: ['Altstadt', 'Neustadt', 'Blasewitz', 'Plauen', 'Striesen']
-  },
-  {
-    name: 'بن (Bonn)',
-    germanName: 'Bonn',
-    province: 'نوردراین-وستفالن (NRW)',
-    popularDistricts: ['Bonn-Zentrum', 'Bad Godesberg', 'Beuel', 'Poppelsdorf', 'Kessenich']
-  },
-  {
-    name: 'مانهایم (Mannheim)',
-    germanName: 'Mannheim',
-    province: 'بادن-وورتمبرگ (Baden-Württemberg)',
-    popularDistricts: ['Innenstadt/Jungbusch', 'Neckarstadt', 'Oststadt', 'Schwetzingerstadt', 'Lindenhof']
-  },
-  {
-    name: 'کارلسروهه (Karlsruhe)',
-    germanName: 'Karlsruhe',
-    province: 'بادن-وورتمبرگ (Baden-Württemberg)',
-    popularDistricts: ['Innenstadt-Ost', 'Innenstadt-West', 'Südweststadt', 'Durlach', 'Weststadt']
-  },
-  {
-    name: 'ویسبادن (Wiesbaden)',
-    germanName: 'Wiesbaden',
-    province: 'هسن (Hessen)',
-    popularDistricts: ['Mitte', 'Biebrich', 'Sonnenberg', 'Rheingauviertel', 'Schierstein']
-  },
-  {
-    name: 'مونستر (Münster)',
-    germanName: 'Münster',
-    province: 'نوردراین-وستفالن (NRW)',
-    popularDistricts: ['Mitte', 'Mauritz', 'Kreuzviertel', 'Sentrup', 'Hiltrup']
-  },
-  {
-    name: 'آخن (Aachen)',
-    germanName: 'Aachen',
-    province: 'نوردراین-وستفالن (NRW)',
-    popularDistricts: ['Aachen-Mitte', 'Laurensberg', 'Richterich', 'Brand', 'Haaren']
-  },
-  {
-    name: 'هایدلبرگ (Heidelberg)',
-    germanName: 'Heidelberg',
-    province: 'بادن-وورتمبرگ (Baden-Württemberg)',
-    popularDistricts: ['Altstadt', 'Bergheim', 'Neuenheim', 'Handschuhsheim', 'Weststadt']
-  },
-  {
-    name: 'ماینتس (Mainz)',
-    germanName: 'Mainz',
-    province: 'راینلاند-فالتس (Rheinland-Pfalz)',
-    popularDistricts: ['Altstadt', 'Neustadt', 'Gonsenheim', 'Bretzenheim']
-  },
-  {
-    name: 'زاربروکن (Saarbrücken)',
-    germanName: 'Saarbrücken',
-    province: 'زارلاند (Saarland)',
-    popularDistricts: ['Alt-Saarbrücken', 'St. Johann', 'St. Arnual']
-  },
-  {
-    name: 'کیل (Kiel)',
-    germanName: 'Kiel',
-    province: 'اشلسویگ-هولشتاین (Schleswig-Holstein)',
-    popularDistricts: ['Mitte', 'Düsternbrook', 'Wik', 'Ravensberg']
-  }
+  // 1. Baden-Württemberg
+  city('اشتوتگارت', 'Stuttgart', PROVINCES.BW),
+  city('مانهایم', 'Mannheim', PROVINCES.BW),
+  city('کارلسروهه', 'Karlsruhe', PROVINCES.BW),
+  city('فرایبورگ', 'Freiburg im Breisgau', PROVINCES.BW),
+  city('هایدلبرگ', 'Heidelberg', PROVINCES.BW),
+  city('هایلبرون', 'Heilbronn', PROVINCES.BW),
+  city('فورتسهایم', 'Pforzheim', PROVINCES.BW),
+  city('اولم', 'Ulm', PROVINCES.BW),
+  city('رویتلینگن', 'Reutlingen', PROVINCES.BW),
+  city('توبینگن', 'Tübingen', PROVINCES.BW),
+
+  // 2. Bayern
+  city('مونیخ', 'München', PROVINCES.BY),
+  city('نورنبرگ', 'Nürnberg', PROVINCES.BY),
+  city('آگسبورگ', 'Augsburg', PROVINCES.BY),
+  city('رگنسبورگ', 'Regensburg', PROVINCES.BY),
+  city('اینگولشتات', 'Ingolstadt', PROVINCES.BY),
+  city('وورتسبورگ', 'Würzburg', PROVINCES.BY),
+  city('فورت', 'Fürth', PROVINCES.BY),
+  city('ارلانگن', 'Erlangen', PROVINCES.BY),
+  city('بامبرگ', 'Bamberg', PROVINCES.BY),
+  city('بایرویت', 'Bayreuth', PROVINCES.BY),
+
+  // 3. Berlin (city-state)
+  city('برلین', 'Berlin', PROVINCES.BE, [
+    'Mitte',
+    'Charlottenburg',
+    'Kreuzberg',
+    'Neukölln',
+    'Friedrichshain',
+    'Prenzlauer Berg',
+    'Spandau',
+    'Steglitz',
+    'Tempelhof',
+    'Köpenick',
+  ]),
+
+  // 4. Brandenburg
+  city('پوتسدام', 'Potsdam', PROVINCES.BB),
+  city('کوتبوس', 'Cottbus', PROVINCES.BB),
+  city('براندنبورگ آن در هافل', 'Brandenburg an der Havel', PROVINCES.BB),
+  city('فرانکفورت اودر', 'Frankfurt (Oder)', PROVINCES.BB),
+  city('اورانینبورگ', 'Oranienburg', PROVINCES.BB),
+  city('ابرسوالده', 'Eberswalde', PROVINCES.BB),
+  city('فالکنزه', 'Falkensee', PROVINCES.BB),
+  city('برناو', 'Bernau bei Berlin', PROVINCES.BB),
+  city('کونیگز ووسترهاوزن', 'Königs Wusterhausen', PROVINCES.BB),
+  city('زنفتنبرگ', 'Senftenberg', PROVINCES.BB),
+
+  // 5. Bremen (city-state)
+  city('برمن', 'Bremen', PROVINCES.HB),
+  city('برمرهافن', 'Bremerhaven', PROVINCES.HB),
+
+  // 6. Hamburg (city-state)
+  city('هامبورگ', 'Hamburg', PROVINCES.HH, [
+    'Hamburg-Mitte',
+    'Altona',
+    'Eimsbüttel',
+    'Hamburg-Nord',
+    'Wandsbek',
+    'Harburg',
+    'Bergedorf',
+  ]),
+
+  // 7. Hessen
+  city('فرانکفورت', 'Frankfurt am Main', PROVINCES.HE),
+  city('ویسبادن', 'Wiesbaden', PROVINCES.HE),
+  city('کاسل', 'Kassel', PROVINCES.HE),
+  city('دارمشتات', 'Darmstadt', PROVINCES.HE),
+  city('اوفنباخ', 'Offenbach am Main', PROVINCES.HE),
+  city('هاناو', 'Hanau', PROVINCES.HE),
+  city('گیسن', 'Gießen', PROVINCES.HE),
+  city('ماربورگ', 'Marburg', PROVINCES.HE),
+  city('فولدا', 'Fulda', PROVINCES.HE),
+  city('روسلسهایم', 'Rüsselsheim am Main', PROVINCES.HE),
+
+  // 8. Mecklenburg-Vorpommern
+  city('روستوک', 'Rostock', PROVINCES.MV),
+  city('شورین', 'Schwerin', PROVINCES.MV),
+  city('نوی‌براندنبورگ', 'Neubrandenburg', PROVINCES.MV),
+  city('اشترالزوند', 'Stralsund', PROVINCES.MV),
+  city('گرایفسوالد', 'Greifswald', PROVINCES.MV),
+  city('ویسمار', 'Wismar', PROVINCES.MV),
+  city('گوسترو', 'Güstrow', PROVINCES.MV),
+  city('وارن', 'Waren (Müritz)', PROVINCES.MV),
+  city('نوی‌اشترلیتس', 'Neustrelitz', PROVINCES.MV),
+  city('پاسه‌والک', 'Pasewalk', PROVINCES.MV),
+
+  // 9. Niedersachsen
+  city('هانوفر', 'Hannover', PROVINCES.NI),
+  city('براونشوایگ', 'Braunschweig', PROVINCES.NI),
+  city('اولدنبورگ', 'Oldenburg', PROVINCES.NI),
+  city('اوسنابروک', 'Osnabrück', PROVINCES.NI),
+  city('ولفسبورگ', 'Wolfsburg', PROVINCES.NI),
+  city('گوتینگن', 'Göttingen', PROVINCES.NI),
+  city('هیلدسهایم', 'Hildesheim', PROVINCES.NI),
+  city('زالتس‌گیتر', 'Salzgitter', PROVINCES.NI),
+  city('ویلهلمسهافن', 'Wilhelmshaven', PROVINCES.NI),
+  city('لونبورگ', 'Lüneburg', PROVINCES.NI),
+
+  // 10. Nordrhein-Westfalen
+  city('کلن', 'Köln', PROVINCES.NW),
+  city('دوسلدورف', 'Düsseldorf', PROVINCES.NW),
+  city('دورتموند', 'Dortmund', PROVINCES.NW),
+  city('اسن', 'Essen', PROVINCES.NW),
+  city('دویسبورگ', 'Duisburg', PROVINCES.NW),
+  city('بوخوم', 'Bochum', PROVINCES.NW),
+  city('ووپرتال', 'Wuppertal', PROVINCES.NW),
+  city('بیله‌فلد', 'Bielefeld', PROVINCES.NW),
+  city('بن', 'Bonn', PROVINCES.NW),
+  city('مونستر', 'Münster', PROVINCES.NW),
+
+  // 11. Rheinland-Pfalz
+  city('ماینتس', 'Mainz', PROVINCES.RP),
+  city('لودویگسهافن', 'Ludwigshafen am Rhein', PROVINCES.RP),
+  city('کوبلنتس', 'Koblenz', PROVINCES.RP),
+  city('تریر', 'Trier', PROVINCES.RP),
+  city('کایزرسلاوترن', 'Kaiserslautern', PROVINCES.RP),
+  city('وورمس', 'Worms', PROVINCES.RP),
+  city('نوی‌اشتات', 'Neustadt an der Weinstraße', PROVINCES.RP),
+  city('اشپایر', 'Speyer', PROVINCES.RP),
+  city('لانداو', 'Landau in der Pfalz', PROVINCES.RP),
+  city('باد کرویتسناخ', 'Bad Kreuznach', PROVINCES.RP),
+
+  // 12. Saarland
+  city('زاربروکن', 'Saarbrücken', PROVINCES.SL),
+  city('نوی‌کیرشن', 'Neunkirchen', PROVINCES.SL),
+  city('هومبورگ', 'Homburg', PROVINCES.SL),
+  city('فولکلینگن', 'Völklingen', PROVINCES.SL),
+  city('زارلوئیس', 'Saarlouis', PROVINCES.SL),
+  city('سنت اینگبرت', 'St. Ingbert', PROVINCES.SL),
+  city('مرتسیگ', 'Merzig', PROVINCES.SL),
+  city('سنت وندل', 'St. Wendel', PROVINCES.SL),
+  city('دیلینگن', 'Dillingen/Saar', PROVINCES.SL),
+  city('بلیس‌کاستل', 'Blieskastel', PROVINCES.SL),
+
+  // 13. Sachsen
+  city('لایپزیگ', 'Leipzig', PROVINCES.SN),
+  city('درسدن', 'Dresden', PROVINCES.SN),
+  city('کمنیتس', 'Chemnitz', PROVINCES.SN),
+  city('تسویکاو', 'Zwickau', PROVINCES.SN),
+  city('پلاون', 'Plauen', PROVINCES.SN),
+  city('گورلیتس', 'Görlitz', PROVINCES.SN),
+  city('فرایبرگ', 'Freiberg', PROVINCES.SN),
+  city('بوتسن', 'Bautzen', PROVINCES.SN),
+  city('رادبویل', 'Radebeul', PROVINCES.SN),
+  city('پیرنا', 'Pirna', PROVINCES.SN),
+
+  // 14. Sachsen-Anhalt
+  city('ماگدبورگ', 'Magdeburg', PROVINCES.ST),
+  city('هاله', 'Halle (Saale)', PROVINCES.ST),
+  city('دسائو-روسلاو', 'Dessau-Roßlau', PROVINCES.ST),
+  city('ویتنبرگ', 'Lutherstadt Wittenberg', PROVINCES.ST),
+  city('هالبرشتات', 'Halberstadt', PROVINCES.ST),
+  city('اشتندال', 'Stendal', PROVINCES.ST),
+  city('مرزه‌بورگ', 'Merseburg', PROVINCES.ST),
+  city('بیترفِلد', 'Bitterfeld-Wolfen', PROVINCES.ST),
+  city('ناومبورگ', 'Naumburg', PROVINCES.ST),
+  city('کویدلینبورگ', 'Quedlinburg', PROVINCES.ST),
+
+  // 15. Schleswig-Holstein
+  city('کیل', 'Kiel', PROVINCES.SH),
+  city('لوبک', 'Lübeck', PROVINCES.SH),
+  city('فلنسبورگ', 'Flensburg', PROVINCES.SH),
+  city('نوی‌مونستر', 'Neumünster', PROVINCES.SH),
+  city('نوردراشتت', 'Norderstedt', PROVINCES.SH),
+  city('المسهورن', 'Elmshorn', PROVINCES.SH),
+  city('پینبرگ', 'Pinneberg', PROVINCES.SH),
+  city('ایتسهو', 'Itzehoe', PROVINCES.SH),
+  city('هوزوم', 'Husum', PROVINCES.SH),
+  city('رندسبورگ', 'Rendsburg', PROVINCES.SH),
+
+  // 16. Thüringen
+  city('ارفورت', 'Erfurt', PROVINCES.TH),
+  city('ینا', 'Jena', PROVINCES.TH),
+  city('گرا', 'Gera', PROVINCES.TH),
+  city('وایمار', 'Weimar', PROVINCES.TH),
+  city('گوتا', 'Gotha', PROVINCES.TH),
+  city('آیزناخ', 'Eisenach', PROVINCES.TH),
+  city('نوردهاوزن', 'Nordhausen', PROVINCES.TH),
+  city('زول', 'Suhl', PROVINCES.TH),
+  city('ایلمناو', 'Ilmenau', PROVINCES.TH),
+  city('مولهاوزن', 'Mühlhausen', PROVINCES.TH),
 ];
 
 export const DEFAULT_CITIES = CITIES_DATA.map(c => c.name);
+
+export const GERMAN_PROVINCES = Object.values(PROVINCES);
 
 // Categories for Classifieds in Germany (Farsi-German community & second hand)
 export const DEFAULT_CATEGORIES: Category[] = [

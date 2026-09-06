@@ -16,6 +16,7 @@ import {
   AppealStatus,
   ActivityLog,
   ActivityActor,
+  ManagedCity,
 } from '../types';
 import { DEFAULT_PLATFORM_SETTINGS, MS_PER_DAY } from '../lib/platformDefaults';
 
@@ -23,7 +24,7 @@ const STORAGE_KEYS = {
   USERS: 'bazaar_de_users_v3',
   ADS: 'bazaar_de_ads_v3',
   CURRENT_USER: 'bazaar_de_current_user_v3',
-  CITIES: 'bazaar_de_cities_v3',
+  CITIES: 'bazaar_de_cities_v4',
   CATEGORIES: 'bazaar_de_categories_v3',
   NOTIFICATIONS: 'bazaar_de_notifications_v3',
   SUPPORT_MESSAGES: 'bazaar_de_support_messages_v3',
@@ -110,7 +111,7 @@ const INITIAL_DEMO_ADS: Ad[] = [
     description: 'اپل مک‌بوک پرو ۱۶ اینچ با چیپست قدرتمند M3 Max، رم ۳۶ گیگابایت یکپارچه و حافظه ۵۱۲ گیگابایت SSD فوق‌سریع.\nرنگ مشکی فضایی (Space Black)، کیبورد آلمانی QWERTZ / انگلیسی.\nسلامت باتری ۹۹ درصد، فقط ۲۴ سیکل شارژ، بسیار تمیز بدون کوچکترین خط و خش.\nهمراه با شارژر اورجینال ۱۴۰ وات مگ‌سیف، جعبه اصلی و فاکتور رسمی خرید از Apple Store فرانکفورت.\nامکان تست حضوری در فرانکفورت منطقه Westend یا ارسال بیمه‌شده با DHL.',
     price: 2650,
     currency: 'EUR',
-    city: 'فرانکفورت (Frankfurt)',
+    city: 'فرانکفورت (Frankfurt am Main)',
     state: 'هسن (Hessen)',
     district: 'Westend',
     categoryId: 'digital',
@@ -314,7 +315,7 @@ const INITIAL_DEMO_ADS: Ad[] = [
     description: 'فرش دستباف تمام ابریشم نقشه قم ۶ متری اعلا با گره‌های ریز و رنگ‌های طبیعی گیاهی.\nارزش‌گذاری و پرداخت قابل انجام به تومان یا تحویل در آلمان.\nبسیار چشم‌نواز و مناسب سالن‌های شیک یا سرمایه‌گذاری.',
     price: 180000000,
     currency: 'TOMAN',
-    city: 'فرانکفورت (Frankfurt)',
+    city: 'فرانکفورت (Frankfurt am Main)',
     state: 'هسن (Hessen)',
     district: 'Innenstadt',
     categoryId: 'home-appliances',
@@ -380,7 +381,10 @@ const seedData = () => {
     localStorage.setItem(STORAGE_KEYS.ADS, JSON.stringify(INITIAL_DEMO_ADS));
   }
   if (!localStorage.getItem(STORAGE_KEYS.CITIES)) {
-    localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(DEFAULT_CITIES));
+    localStorage.setItem(
+      STORAGE_KEYS.CITIES,
+      JSON.stringify(DEFAULT_CITIES.map(name => ({ name, isActive: true })))
+    );
   }
   if (!localStorage.getItem(STORAGE_KEYS.CATEGORIES)) {
     localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(DEFAULT_CATEGORIES));
@@ -576,17 +580,20 @@ export const StorageService = {
   },
 
   // Categories
-  getCategories: (): Category[] => {
+  getCategories: (options?: { includeInactive?: boolean }): Category[] => {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
-      return data ? JSON.parse(data) : DEFAULT_CATEGORIES;
+      const all: Category[] = data ? JSON.parse(data) : DEFAULT_CATEGORIES;
+      if (options?.includeInactive) return all;
+      return all.filter(c => c.isActive !== false);
     } catch {
       return DEFAULT_CATEGORIES;
     }
   },
 
   saveCategory: (category: Category) => {
-    const categories = StorageService.getCategories();
+    const raw = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
+    const categories: Category[] = raw ? JSON.parse(raw) : [...DEFAULT_CATEGORIES];
     const index = categories.findIndex(c => c.id === category.id);
     if (index >= 0) {
       categories[index] = category;
@@ -597,31 +604,82 @@ export const StorageService = {
   },
 
   deleteCategory: (id: string) => {
-    const categories = StorageService.getCategories().filter(c => c.id !== id);
-    localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
+    const raw = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
+    const categories: Category[] = raw ? JSON.parse(raw) : [...DEFAULT_CATEGORIES];
+    localStorage.setItem(
+      STORAGE_KEYS.CATEGORIES,
+      JSON.stringify(categories.filter(c => c.id !== id))
+    );
   },
 
-  // Cities
-  getCities: (): string[] => {
+  // Cities — stored as ManagedCity[]; migrates legacy string[]
+  getCityRecords: (): ManagedCity[] => {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.CITIES);
-      return data ? JSON.parse(data) : DEFAULT_CITIES;
+      if (!data) {
+        return DEFAULT_CITIES.map(name => ({ name, isActive: true }));
+      }
+      const parsed = JSON.parse(data) as unknown;
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        return DEFAULT_CITIES.map(name => ({ name, isActive: true }));
+      }
+      if (typeof parsed[0] === 'string') {
+        const migrated = (parsed as string[]).map(name => ({ name, isActive: true }));
+        localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(migrated));
+        return migrated;
+      }
+      return (parsed as ManagedCity[]).map(c => ({
+        name: c.name,
+        isActive: c.isActive !== false,
+      }));
     } catch {
-      return DEFAULT_CITIES;
+      return DEFAULT_CITIES.map(name => ({ name, isActive: true }));
     }
+  },
+
+  saveCityRecords: (cities: ManagedCity[]) => {
+    localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(cities));
+  },
+
+  /** Active city names for public UI / filters */
+  getCities: (options?: { includeInactive?: boolean }): string[] => {
+    const records = StorageService.getCityRecords();
+    if (options?.includeInactive) return records.map(c => c.name);
+    return records.filter(c => c.isActive !== false).map(c => c.name);
   },
 
   addCity: (city: string) => {
-    const cities = StorageService.getCities();
-    if (!cities.includes(city)) {
-      cities.push(city);
-      localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(cities));
+    const cities = StorageService.getCityRecords();
+    if (!cities.some(c => c.name === city)) {
+      cities.push({ name: city, isActive: true });
+      StorageService.saveCityRecords(cities);
     }
   },
 
+  updateCity: (oldName: string, patch: { name?: string; isActive?: boolean }) => {
+    const cities = StorageService.getCityRecords();
+    const idx = cities.findIndex(c => c.name === oldName);
+    if (idx < 0) return;
+    const nextName = patch.name?.trim() || cities[idx].name;
+    if (nextName !== oldName && cities.some(c => c.name === nextName)) return;
+    cities[idx] = {
+      name: nextName,
+      isActive: patch.isActive !== undefined ? patch.isActive : cities[idx].isActive !== false,
+    };
+    StorageService.saveCityRecords(cities);
+  },
+
   removeCity: (city: string) => {
-    const cities = StorageService.getCities().filter(c => c !== city);
-    localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(cities));
+    StorageService.saveCityRecords(
+      StorageService.getCityRecords().filter(c => c.name !== city)
+    );
+  },
+
+  /** Replace stored cities with the full default Bundesländer list */
+  resetCitiesToDefaults: () => {
+    StorageService.saveCityRecords(
+      DEFAULT_CITIES.map(name => ({ name, isActive: true }))
+    );
   },
 
   // Users & Auth
@@ -1075,16 +1133,19 @@ export const StorageService = {
   },
 
   // Banners
-  getBanners: (): Banner[] => {
+  getBanners: (options?: { includeInactive?: boolean }): Banner[] => {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.BANNERS) || '[]');
+      const data = localStorage.getItem(STORAGE_KEYS.BANNERS);
+      const all: Banner[] = data ? JSON.parse(data) : INITIAL_BANNERS;
+      if (options?.includeInactive) return all;
+      return all.filter(b => b.isActive !== false);
     } catch {
       return INITIAL_BANNERS;
     }
   },
 
   saveBanner: (banner: Banner) => {
-    const banners = StorageService.getBanners();
+    const banners = StorageService.getBanners({ includeInactive: true });
     const idx = banners.findIndex(b => b.id === banner.id);
     if (idx >= 0) {
       banners[idx] = banner;
@@ -1095,7 +1156,7 @@ export const StorageService = {
   },
 
   deleteBanner: (id: string) => {
-    const banners = StorageService.getBanners().filter(b => b.id !== id);
+    const banners = StorageService.getBanners({ includeInactive: true }).filter(b => b.id !== id);
     localStorage.setItem(STORAGE_KEYS.BANNERS, JSON.stringify(banners));
   },
 

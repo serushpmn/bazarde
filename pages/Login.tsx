@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../App';
 import { StorageService } from '../services/storage';
-import { User, UserRole, CITIES_DATA } from '../types';
+import { User, UserRole, CITIES_DATA, GERMAN_PROVINCES } from '../types';
 import {
   Phone,
   User as UserIcon,
@@ -95,7 +95,7 @@ export const Login: React.FC = () => {
         id: 'editor-1',
         name: 'ناظر آگهی‌ها در آلمان',
         phone: '+49 171 0000000',
-        city: 'فرانکفورت (Frankfurt)',
+        city: 'فرانکفورت (Frankfurt am Main)',
         role: UserRole.EDITOR
       };
       login(editor);
@@ -185,8 +185,12 @@ export const Login: React.FC = () => {
                 onChange={e => setCity(e.target.value)}
                 className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs outline-none focus:border-primary font-medium"
               >
-                {CITIES_DATA.map(c => (
-                  <option key={c.name} value={c.name}>{c.name} - {c.province}</option>
+                {GERMAN_PROVINCES.map(province => (
+                  <optgroup key={province} label={province}>
+                    {CITIES_DATA.filter(c => c.province === province).map(c => (
+                      <option key={c.name} value={c.name}>{c.name}</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </div>

@@ -8,6 +8,7 @@ import {
   User,
   UserRole,
   CITIES_DATA,
+  GERMAN_PROVINCES,
   Appeal,
   AppNotification,
 } from '../types';
@@ -711,10 +712,14 @@ export const Profile: React.FC = () => {
                     onChange={e => setCity(e.target.value)}
                     className="w-full p-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs outline-none focus:border-primary font-medium"
                   >
-                    {CITIES_DATA.map(c => (
-                      <option key={c.name} value={c.name}>
-                        {c.name} - {c.province}
-                      </option>
+                    {GERMAN_PROVINCES.map(province => (
+                      <optgroup key={province} label={province}>
+                        {CITIES_DATA.filter(c => c.province === province).map(c => (
+                          <option key={c.name} value={c.name}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>

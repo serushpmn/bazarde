@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth, useCity } from '../App';
 import { StorageService } from '../services/storage';
-import { Ad, AdStatus, Category, CITIES_DATA, UserRole } from '../types';
+import { Ad, AdStatus, Category, CITIES_DATA, GERMAN_PROVINCES, UserRole } from '../types';
 import { numberToPersianWords } from '../lib/formatters';
 import { CategoryIcon } from '../components/CategoryIcon';
 import {
@@ -35,9 +35,9 @@ export const NewAd: React.FC = () => {
   const [title, setTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSubCategory, setSelectedSubCategory] = useState('');
-  const [city, setCity] = useState(
-    selectedCity && selectedCity !== 'ALL' ? selectedCity : 'برلین (Berlin)'
-  );
+  const [province, setProvince] = useState('');
+  /** Empty string = city not in list — ad is registered with state only */
+  const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
   const [currency, setCurrency] = useState<'EUR' | 'TOMAN'>('EUR');
   const [price, setPrice] = useState<string>('');
@@ -60,6 +60,20 @@ export const NewAd: React.FC = () => {
   const isStaff = user?.role === UserRole.ADMIN || user?.role === UserRole.EDITOR;
   const userPhone = user?.phone?.trim() || '';
 
+  const resolveLocationFromAd = (adCity: string, adState?: string) => {
+    const knownCity = CITIES_DATA.find(c => c.name === adCity);
+    if (knownCity) {
+      return { province: knownCity.province, city: knownCity.name };
+    }
+    if (adState && (GERMAN_PROVINCES as readonly string[]).includes(adState)) {
+      return { province: adState, city: '' };
+    }
+    if ((GERMAN_PROVINCES as readonly string[]).includes(adCity)) {
+      return { province: adCity, city: '' };
+    }
+    return { province: adState || '', city: '' };
+  };
+
   useEffect(() => {
     const cats = StorageService.getCategories();
     setCategories(cats);
@@ -78,7 +92,9 @@ export const NewAd: React.FC = () => {
       setTitle(existingAd.title);
       setSelectedCategory(existingAd.categoryId);
       setSelectedSubCategory(existingAd.subCategoryId || '');
-      setCity(existingAd.city);
+      const loc = resolveLocationFromAd(existingAd.city, existingAd.state);
+      setProvince(loc.province);
+      setCity(loc.city);
       setDistrict(existingAd.district || '');
       setCurrency(existingAd.currency || 'EUR');
       setPrice(existingAd.price > 0 ? String(existingAd.price) : '');
@@ -101,10 +117,33 @@ export const NewAd: React.FC = () => {
     if (cats.length > 0) {
       setSelectedCategory(cats[0].id);
     }
-  }, [editId, isEditMode, isStaff, navigate, user]);
 
+    // Prefill from layout city filter when creating
+    if (selectedCity && selectedCity !== 'ALL') {
+      const known = CITIES_DATA.find(c => c.name === selectedCity);
+      if (known) {
+        setProvince(known.province);
+        setCity(known.name);
+      }
+    }
+  }, [editId, isEditMode, isStaff, navigate, user, selectedCity]);
+
+  const citiesInProvince = province
+    ? CITIES_DATA.filter(c => c.province === province)
+    : [];
+  const activeCityData = city ? CITIES_DATA.find(c => c.name === city) : undefined;
   const activeCategoryObj = categories.find(c => c.id === selectedCategory);
-  const activeCityData = CITIES_DATA.find(c => c.name === city);
+
+  const handleProvinceChange = (nextProvince: string) => {
+    setProvince(nextProvince);
+    setCity('');
+    setDistrict('');
+  };
+
+  const handleCityChange = (nextCity: string) => {
+    setCity(nextCity);
+    setDistrict('');
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -187,6 +226,10 @@ export const NewAd: React.FC = () => {
       setErrorMsg('لطفاً توضیحات آگهی را تکمیل فرمایید.');
       return;
     }
+    if (!province.trim()) {
+      setErrorMsg('لطفاً ایالت (Bundesland) را انتخاب کنید.');
+      return;
+    }
 
     const normalizedTelegram = telegramId.trim().replace(/^@+/, '');
     if (showTelegram && !normalizedTelegram) {
@@ -198,6 +241,7 @@ export const NewAd: React.FC = () => {
       return;
     }
 
+    const resolvedCity = city.trim() || province.trim();
     const numPrice = isFree || isNegotiable ? 0 : parseInt(price.replace(/,/g, ''), 10) || 0;
     const existingAd = isEditMode && editId ? StorageService.getAdById(editId) : undefined;
 
@@ -231,8 +275,8 @@ export const NewAd: React.FC = () => {
       currency,
       isNegotiable,
       isFree,
-      city,
-      state: activeCityData?.province,
+      city: resolvedCity,
+      state: province.trim(),
       district: district.trim() || undefined,
       categoryId: selectedCategory,
       subCategoryId: selectedSubCategory || undefined,
@@ -441,30 +485,67 @@ export const NewAd: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] text-gray-500 mb-1">شهر یا ایالت:</label>
+                <label className="block text-[11px] text-gray-500 mb-1">ایالت (Bundesland) *</label>
                 <select
-                  value={city}
-                  onChange={e => setCity(e.target.value)}
+                  value={province}
+                  onChange={e => handleProvinceChange(e.target.value)}
                   className="w-full p-2.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-semibold outline-none focus:border-primary"
+                  required
                 >
-                  {CITIES_DATA.map(c => (
-                    <option key={c.name} value={c.name}>
-                      {c.name} - {c.province}
+                  <option value="">انتخاب ایالت...</option>
+                  {GERMAN_PROVINCES.map(p => (
+                    <option key={p} value={p}>
+                      {p}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-[11px] text-gray-500 mb-1">منطقه شهری یا کد پستی (PLZ):</label>
-                <input
-                  type="text"
-                  placeholder="مثلاً Mitte, Schwabing, 10115 یا ..."
-                  value={district}
-                  onChange={e => setDistrict(e.target.value)}
-                  className="w-full p-2.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs outline-none focus:border-primary dir-ltr text-left font-mono"
-                />
+                <label className="block text-[11px] text-gray-500 mb-1">شهر (اختیاری)</label>
+                <select
+                  value={city}
+                  onChange={e => handleCityChange(e.target.value)}
+                  disabled={!province}
+                  className="w-full p-2.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-semibold outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {province ? 'شهر در لیست نیست — فقط ایالت' : 'ابتدا ایالت را انتخاب کنید'}
+                  </option>
+                  {citiesInProvince.map(c => (
+                    <option key={c.name} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] text-gray-500 mb-1">منطقه شهری یا کد پستی (PLZ) — اختیاری</label>
+              <input
+                type="text"
+                list={activeCityData?.popularDistricts?.length ? 'district-suggestions' : undefined}
+                placeholder={
+                  activeCityData?.popularDistricts?.length
+                    ? `مثلاً ${activeCityData.popularDistricts[0]}`
+                    : 'مثلاً Mitte یا 10115'
+                }
+                value={district}
+                onChange={e => setDistrict(e.target.value)}
+                disabled={!province}
+                className="w-full p-2.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs outline-none focus:border-primary dir-ltr text-left font-mono disabled:opacity-50"
+              />
+              {activeCityData?.popularDistricts && activeCityData.popularDistricts.length > 0 && (
+                <datalist id="district-suggestions">
+                  {activeCityData.popularDistricts.map(d => (
+                    <option key={d} value={d} />
+                  ))}
+                </datalist>
+              )}
+              <p className="text-[10px] text-gray-400 mt-1.5">
+                اگر شهرتان در فهرست نیست، همان انتخاب ایالت کافی است و می‌توانید آگهی را ثبت کنید.
+              </p>
             </div>
           </div>
 

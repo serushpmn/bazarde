@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { StorageService } from '../services/storage';
-import { Ad, AdStatus, Category, Banner, AppNotification } from '../types';
+import { Ad, AdStatus, Category, Banner, AppNotification, CITIES_DATA } from '../types';
 import { useAuth, useCity } from '../App';
 import AdCard from '../components/AdCard';
 import { ListingFilters } from '../components/ListingFilters';
@@ -149,9 +149,14 @@ export const Home: React.FC = () => {
         // Status check
         if (ad.status !== AdStatus.APPROVED) return false;
 
-        // City Filter
+        // City / state filter: exact city, or ads posted as state-only for that Bundesland
         if (selectedCity && selectedCity !== 'ALL') {
-          if (ad.city !== selectedCity) return false;
+          const selectedMeta = CITIES_DATA.find(c => c.name === selectedCity);
+          const matchesCity = ad.city === selectedCity;
+          const matchesStateOnly =
+            Boolean(selectedMeta) &&
+            (ad.state === selectedMeta!.province || ad.city === selectedMeta!.province);
+          if (!matchesCity && !matchesStateOnly) return false;
         }
 
         // Category Filter
