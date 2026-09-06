@@ -8,6 +8,7 @@ import { CityModal } from './CityModal';
 import { SearchBar } from './ui/SearchBar';
 import { container } from '../lib/designTokens';
 import { toPersianDigits, getTimeAgo } from '../lib/formatters';
+import { UserAvatar } from './UserAvatar';
 import {
   MapPin,
   Search,
@@ -369,13 +370,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                     className="flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-xs font-semibold"
                   >
-                    {user.avatar ? (
-                      <img src={user.avatar} alt={user.name} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px] sm:text-xs">
-                        {user.name.charAt(0)}
-                      </div>
-                    )}
+                    <UserAvatar
+                      avatar={user.avatar}
+                      name={user.name}
+                      className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover"
+                    />
                     <span className="hidden sm:inline truncate max-w-[100px]">{user.name}</span>
                     <ChevronDown className="w-3 h-3 text-gray-400 hidden sm:block" />
                   </button>

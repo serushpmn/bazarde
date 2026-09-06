@@ -17,7 +17,7 @@ Product rules extracted from code. Independent of UI styling.
 
 1. Primary stored contact datum is **phone**.
 2. Ad may expose phone, WhatsApp (same account phone), and/or Telegram username via toggles.
-3. At least **one** contact method must be enabled on submit (phone display, WhatsApp, or Telegram with username).
+3. At least one of **show phone** or **show Telegram** (with username) must be enabled on submit. WhatsApp alone is not sufficient.
 4. Violation reports store `reporterUserId`, not separate reporter phone/name.
 5. User may delete account (removes user, their ads, their notifications).
 

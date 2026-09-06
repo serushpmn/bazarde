@@ -19,6 +19,7 @@ import {
   ManagedCity,
 } from '../types';
 import { DEFAULT_PLATFORM_SETTINGS, MS_PER_DAY } from '../lib/platformDefaults';
+import { sanitizeUserAvatar } from '../lib/defaultAvatars';
 
 const STORAGE_KEYS = {
   USERS: 'bazaar_de_users_v3',
@@ -402,7 +403,7 @@ const seedData = () => {
       phone: '+49 170 0000000',
       city: 'برلین (Berlin)',
       role: UserRole.ADMIN,
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+      avatar: undefined,
       createdAt: Date.now() - 1000 * 60 * 60 * 24 * 30
     };
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([adminUser]));
@@ -698,7 +699,7 @@ export const StorageService = {
       phone: user.phone.trim(),
       city: user.city?.trim() || undefined,
       role: user.role,
-      avatar: user.avatar,
+      avatar: sanitizeUserAvatar(user.avatar),
       createdAt: user.createdAt,
       savedAdIds: user.savedAdIds,
     };

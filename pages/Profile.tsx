@@ -16,6 +16,8 @@ import AdCard from '../components/AdCard';
 import AdImage from '../components/AdImage';
 import { NotificationList } from '../components/NotificationList';
 import { toPersianDigits, getTimeAgo, formatPrice } from '../lib/formatters';
+import { DEFAULT_AVATARS, resolveUserAvatar, isDefaultAvatar } from '../lib/defaultAvatars';
+import { UserAvatar } from '../components/UserAvatar';
 import {
   User as UserIcon,
   Bookmark,
@@ -68,7 +70,9 @@ export const Profile: React.FC = () => {
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [city, setCity] = useState(user?.city || 'برلین (Berlin)');
-  const [avatar, setAvatar] = useState(user?.avatar || '');
+  const [avatar, setAvatar] = useState(
+    user?.avatar && isDefaultAvatar(user.avatar) ? user.avatar : ''
+  );
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // Delete ad modal
@@ -116,7 +120,7 @@ export const Profile: React.FC = () => {
       setName(user.name);
       setPhone(user.phone || '');
       setCity(user.city || 'برلین (Berlin)');
-      setAvatar(user.avatar || '');
+      setAvatar(user.avatar && isDefaultAvatar(user.avatar) ? user.avatar : '');
     }
   }, [user]);
 
@@ -195,7 +199,7 @@ export const Profile: React.FC = () => {
       name: name.trim(),
       phone: phone.trim(),
       city,
-      avatar: avatar.trim() || undefined,
+      avatar: avatar && isDefaultAvatar(avatar) ? avatar : undefined,
     };
     StorageService.saveUser(updated);
     login(updated);
@@ -243,13 +247,11 @@ export const Profile: React.FC = () => {
       {/* Profile Header Banner */}
       <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 sm:p-8 border border-gray-100 dark:border-gray-800 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-2xl overflow-hidden border-2 border-primary/20">
-            {user.avatar ? (
-              <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
-            ) : (
-              <span>{user.name.charAt(0)}</span>
-            )}
-          </div>
+          <UserAvatar
+            avatar={user.avatar}
+            name={user.name}
+            className="w-16 h-16 rounded-2xl object-cover border-2 border-primary/20"
+          />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-black text-gray-900 dark:text-white">{user.name}</h1>
@@ -297,8 +299,8 @@ export const Profile: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 pb-1 overflow-x-auto no-scrollbar">
+      {/* Tabs — wrap so all tabs stay visible on mobile */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 dark:border-gray-800 pb-2">
         {(
           [
             { id: 'my_ads' as const, label: 'آگهی‌های من', count: myAds.length, icon: Layers },
@@ -316,7 +318,7 @@ export const Profile: React.FC = () => {
               count: recentAds.length,
               icon: History,
             },
-            { id: 'settings' as const, label: 'تنظیمات حساب', icon: Settings },
+            { id: 'settings' as const, label: 'تنظیمات', icon: Settings },
           ] as const
         ).map(tab => {
           const Icon = tab.icon;
@@ -326,17 +328,17 @@ export const Profile: React.FC = () => {
               key={tab.id}
               type="button"
               onClick={() => handleTabChange(tab.id)}
-              className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
+              className={`px-3 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap ${
                 isActive
                   ? 'bg-primary text-white shadow-xs'
                   : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-100 dark:border-gray-800'
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="w-3.5 h-3.5 shrink-0" />
               <span>{tab.label}</span>
               {'count' in tab && typeof tab.count === 'number' && (
                 <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                     isActive
                       ? 'bg-white/20 text-white'
                       : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
@@ -727,15 +729,53 @@ export const Profile: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
-                  آدرس تصویر پروفایل (Avatar URL)
+                  تصویر پروفایل
                 </label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={avatar}
-                  onChange={e => setAvatar(e.target.value)}
-                  className="w-full p-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs outline-none focus:border-primary font-mono dir-ltr text-left"
-                />
+                <p className="text-[11px] text-gray-500 mb-3">
+                  یکی از تصاویر پیش‌فرض را انتخاب کنید. در صورت عدم انتخاب، تصویر پیش‌فرض سامانه نمایش داده می‌شود.
+                </p>
+                <div className="grid grid-cols-5 gap-2.5">
+                  {DEFAULT_AVATARS.map((url, index) => {
+                    const isChosen = avatar === url;
+                    return (
+                      <button
+                        key={url}
+                        type="button"
+                        onClick={() => setAvatar(url)}
+                        className={`relative aspect-square rounded-2xl overflow-hidden border-2 transition-all ${
+                          isChosen
+                            ? 'border-primary ring-2 ring-primary/30 scale-[1.02]'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-primary/50'
+                        }`}
+                        title={`آواتار ${index + 1}`}
+                      >
+                        <img src={url} alt="" className="w-full h-full object-cover bg-gray-100" />
+                        {isChosen && (
+                          <span className="absolute inset-0 bg-primary/10 flex items-center justify-center">
+                            <CheckCircle2 className="w-5 h-5 text-primary drop-shadow" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {avatar && (
+                  <button
+                    type="button"
+                    onClick={() => setAvatar('')}
+                    className="mt-2 text-[11px] text-gray-500 hover:text-primary font-medium"
+                  >
+                    برداشتن انتخاب (استفاده از پیش‌فرض سامانه)
+                  </button>
+                )}
+                <div className="mt-3 flex items-center gap-2 text-[11px] text-gray-400">
+                  <img
+                    src={resolveUserAvatar(avatar || undefined)}
+                    alt=""
+                    className="w-8 h-8 rounded-full object-cover border border-gray-200"
+                  />
+                  <span>پیش‌نمایش تصویر فعلی</span>
+                </div>
               </div>
 
               <div className="pt-2 flex justify-end">

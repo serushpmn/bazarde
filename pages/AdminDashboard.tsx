@@ -19,6 +19,7 @@ import {
 } from '../types';
 import { CategoryIcon } from '../components/CategoryIcon';
 import AdImage from '../components/AdImage';
+import { UserAvatar } from '../components/UserAvatar';
 import { hasValidAdImage } from '../lib/adImagePlaceholders';
 import { formatPrice, getTimeAgo, toPersianDigits } from '../lib/formatters';
 import { AdminSettingsPanel, AdminAppealsPanel, AdminLogsPanel } from '../components/AdminCompliancePanels';
@@ -120,6 +121,9 @@ export const AdminDashboard: React.FC = () => {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editCatName, setEditCatName] = useState('');
   const [editCatIcon, setEditCatIcon] = useState('Layers');
+  const [editingSubKey, setEditingSubKey] = useState<string | null>(null); // `${catId}::${subId}`
+  const [editSubName, setEditSubName] = useState('');
+  const [editSubSlug, setEditSubSlug] = useState('');
 
   // City Form
   const [newCityName, setNewCityName] = useState('');
@@ -278,28 +282,40 @@ export const AdminDashboard: React.FC = () => {
     e.preventDefault();
     if (!selectedCatForSub || !newSubName.trim()) return;
     const cat = categories.find(c => c.id === selectedCatForSub);
-    if (cat) {
-      const subId = newSubSlug.trim() || `sub-${Date.now()}`;
-      cat.subcategories.push({
-        id: subId,
-        name: newSubName.trim(),
-        slug: subId
-      });
-      StorageService.saveCategory(cat);
-      setNewSubName('');
-      setNewSubSlug('');
-      loadAll();
+    if (!cat) return;
+    const subId = newSubSlug.trim() || `sub-${Date.now()}`;
+    if (cat.subcategories.some(s => s.id === subId)) {
+      window.alert('شناسه این زیردسته تکراری است.');
+      return;
     }
+    StorageService.saveCategory({
+      ...cat,
+      subcategories: [
+        ...cat.subcategories,
+        {
+          id: subId,
+          name: newSubName.trim(),
+          slug: subId,
+          isActive: true,
+        },
+      ],
+    });
+    setNewSubName('');
+    setNewSubSlug('');
+    loadAll();
   };
 
   const handleDeleteCategory = (catId: string) => {
     if (window.confirm('با حذف این دسته تمام زیردسته‌های آن نیز حذف خواهند شد. ادامه می‌دهید؟')) {
       StorageService.deleteCategory(catId);
+      if (editingCategoryId === catId) setEditingCategoryId(null);
+      if (editingSubKey?.startsWith(`${catId}::`)) setEditingSubKey(null);
       loadAll();
     }
   };
 
   const startEditCategory = (cat: Category) => {
+    setEditingSubKey(null);
     setEditingCategoryId(cat.id);
     setEditCatName(cat.name);
     setEditCatIcon(cat.icon || 'Layers');
@@ -315,6 +331,42 @@ export const AdminDashboard: React.FC = () => {
       icon: editCatIcon.trim() || cat.icon,
     });
     setEditingCategoryId(null);
+    loadAll();
+  };
+
+  const startEditSubCategory = (catId: string, sub: { id: string; name: string; slug: string }) => {
+    setEditingCategoryId(null);
+    setEditingSubKey(`${catId}::${sub.id}`);
+    setEditSubName(sub.name);
+    setEditSubSlug(sub.slug || sub.id);
+  };
+
+  const handleSaveSubCategoryEdit = () => {
+    if (!editingSubKey || !editSubName.trim()) return;
+    const [catId, subId] = editingSubKey.split('::');
+    const cat = categories.find(c => c.id === catId);
+    if (!cat) return;
+    StorageService.saveCategory({
+      ...cat,
+      subcategories: cat.subcategories.map(s =>
+        s.id === subId
+          ? { ...s, name: editSubName.trim(), slug: editSubSlug.trim() || s.slug || s.id }
+          : s
+      ),
+    });
+    setEditingSubKey(null);
+    loadAll();
+  };
+
+  const handleDeleteSubCategory = (catId: string, subId: string) => {
+    if (!window.confirm('آیا از حذف این زیردسته اطمینان دارید؟')) return;
+    const cat = categories.find(c => c.id === catId);
+    if (!cat) return;
+    StorageService.saveCategory({
+      ...cat,
+      subcategories: cat.subcategories.filter(s => s.id !== subId),
+    });
+    if (editingSubKey === `${catId}::${subId}`) setEditingSubKey(null);
     loadAll();
   };
 
@@ -960,6 +1012,17 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">شناسه انگلیسی (اختیاری)</label>
+                <input
+                  type="text"
+                  placeholder="translation-docs"
+                  value={newSubSlug}
+                  onChange={e => setNewSubSlug(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs outline-none font-mono dir-ltr"
+                />
+              </div>
+
               <button
                 type="submit"
                 className="w-full py-2.5 rounded-xl bg-gray-800 dark:bg-gray-700 hover:bg-gray-900 text-white text-xs font-bold shadow-xs flex items-center justify-center gap-1"
@@ -1056,18 +1119,90 @@ export const AdminDashboard: React.FC = () => {
                       )}
                     </div>
 
-                    {cat.subcategories && cat.subcategories.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-2 border-t border-gray-200/60 dark:border-gray-700/60">
-                        {cat.subcategories.map(sub => (
-                          <span
-                            key={sub.id}
-                            className="px-2.5 py-1 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-700 dark:text-gray-300 font-medium"
-                          >
-                            {sub.name}
-                          </span>
-                        ))}
+                    <div className="pt-2 border-t border-gray-200/60 dark:border-gray-700/60 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-bold text-gray-400">
+                          زیردسته‌ها ({toPersianDigits(cat.subcategories?.length || 0)})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCatForSub(cat.id);
+                            setEditingSubKey(null);
+                          }}
+                          className="text-[10px] font-bold text-primary hover:underline"
+                        >
+                          + افزودن زیردسته
+                        </button>
                       </div>
-                    )}
+
+                      {(!cat.subcategories || cat.subcategories.length === 0) && (
+                        <p className="text-[11px] text-gray-400 py-1">هنوز زیردسته‌ای ثبت نشده است.</p>
+                      )}
+
+                      {(cat.subcategories || []).map(sub => {
+                        const subKey = `${cat.id}::${sub.id}`;
+                        const isEditingSub = editingSubKey === subKey;
+                        return (
+                          <div
+                            key={sub.id}
+                            className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
+                          >
+                            {isEditingSub ? (
+                              <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
+                                <input
+                                  type="text"
+                                  value={editSubName}
+                                  onChange={e => setEditSubName(e.target.value)}
+                                  className="flex-1 min-w-[100px] p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-transparent text-[11px]"
+                                  placeholder="نام زیردسته"
+                                />
+                                <input
+                                  type="text"
+                                  value={editSubSlug}
+                                  onChange={e => setEditSubSlug(e.target.value)}
+                                  className="w-28 p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-transparent text-[10px] font-mono dir-ltr"
+                                  placeholder="slug"
+                                />
+                                <button type="button" onClick={handleSaveSubCategoryEdit} className="p-1.5 rounded-lg bg-primary text-white" title="ذخیره">
+                                  <Save className="w-3 h-3" />
+                                </button>
+                                <button type="button" onClick={() => setEditingSubKey(null)} className="p-1.5 text-gray-500" title="انصراف">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="min-w-0 flex-1">
+                                  <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300 block truncate">
+                                    {sub.name}
+                                  </span>
+                                  <span className="text-[9px] text-gray-400 font-mono dir-ltr">{sub.id}</span>
+                                </div>
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditSubCategory(cat.id, sub)}
+                                    className="text-primary hover:bg-red-50 p-1 rounded-lg"
+                                    title="ویرایش زیردسته"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSubCategory(cat.id, sub.id)}
+                                    className="text-rose-500 hover:bg-rose-50 p-1 rounded-lg"
+                                    title="حذف زیردسته"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                   );
                 })}
@@ -1446,9 +1581,9 @@ export const AdminDashboard: React.FC = () => {
             {users.map(u => (
               <div key={u.id} className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <img
-                    src={u.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'}
-                    alt=""
+                  <UserAvatar
+                    avatar={u.avatar}
+                    name={u.name}
                     className="w-10 h-10 rounded-full object-cover"
                   />
                   <div>

@@ -236,8 +236,8 @@ export const NewAd: React.FC = () => {
       setErrorMsg('آیدی تلگرام را وارد کنید یا تیک «نمایش تلگرام» را بردارید.');
       return;
     }
-    if (!showPhone && !allowWhatsapp && !(showTelegram && normalizedTelegram)) {
-      setErrorMsg('حداقل یک راه ارتباطی (تماس، واتس‌اپ یا تلگرام) را انتخاب کنید.');
+    if (!showPhone && !(showTelegram && normalizedTelegram)) {
+      setErrorMsg('حداقل یکی از گزینه‌های «نمایش شماره تماس» یا «نمایش آیدی تلگرام» را فعال کنید.');
       return;
     }
 
@@ -755,7 +755,7 @@ export const NewAd: React.FC = () => {
                 <span>راه‌های ارتباط با خریدار</span>
               </h3>
               <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-                حداقل یک روش را انتخاب کنید. می‌توانید شماره تماس را مخفی کرده و فقط از تلگرام استفاده کنید.
+                حداقل یکی از «نمایش شماره تماس» یا «نمایش آیدی تلگرام» الزامی است. واتس‌اپ اختیاری است و به‌تنهایی کافی نیست.
               </p>
             </div>
 
